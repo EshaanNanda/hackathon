@@ -206,6 +206,11 @@
                 </div>
                 <div class="size-10 rounded-full bg-gradient-to-br from-primary-600 to-primary-800 text-white flex items-center justify-center font-bold">AR</div>
               </div>
+              <!--User, Admin, Vendor Profile-->
+              <div class="hidden md:flex items-center gap-3 pl-2 ml-2 border-l border-steel-200 dark:border-steel-700">
+              <div id="userProfile" class="flex items-center gap-3">
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -629,22 +634,14 @@
             </div>
           </section>
           <!-- 8. VENDOR MANAGEMENT -->
-          <section id="page-vendors" class="page hidden space-y-2 relative pt-4">
-            <!-- Notice re: login limitation -->
-          <div class="mb-8">
-            <div class="inline-flex items-center gap-1 rounded-full bg-amber-50 text-amber-900 px-3 py-1.5 text-xs font-medium border border-amber-200 shadow-soft">
-              <!-- info icon -->
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
-                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-4a1 1 0 100 2 1 1 0 000-2zm-2 4a1 1 0 000 2h1v3a1 1 0 102 0v-4a1 1 0 00-1-1H8z" clip-rule="evenodd" />
-              </svg>
-            </div>
-          </div>
-          <div id="app" class="space-y-2">
-            <!-- Views rendered by JS -->
-          </div>
+          <section id="page-vendors" class="page hidden space-y-10 pt-2 relative">
+            <!-- Role tabs are at right-->
             <div class="absolute top-2 right-2 flex items-center gap-1" id="roleTabs">
               <!-- Role tabs rendered by JS -->
-            </div>    
+            </div>
+            <div id="app" class="space-y-2 mt-2">
+            <!-- Views rendered by JS -->
+            </div>   
 </main>
 
  <footer class="mt-10 py-6">
@@ -727,7 +724,7 @@
       document.getElementById('btnAssistant').addEventListener('click', () => toggleChat(true));
       document.getElementById('themeToggle').addEventListener('click', toggleTheme);
       document.getElementById('bellBtn').addEventListener('click', toggleNotif);
-      document.getElementById('chatToggle').addEventListener('click', () => toggleChat(true));
+      //document.getElementById('chatToggle').addEventListener('click', () => toggleChat(true));
       document.getElementById('toggleAsIs').addEventListener('change', toggleProcessLayers);
       document.getElementById('toggleAsDesigned').addEventListener('change', toggleProcessLayers);
       document.getElementById('mobileMenuBtn').addEventListener('click', () => toggleMobile(true));
@@ -1472,24 +1469,112 @@
     // ----------------------------
     // Rendering core
     // ----------------------------
-    function setRole(role) {
-      store.role = role;
-      if (role === 'Admin' && !store.admin.currentRequestId) {
-        store.admin.currentStep = 'Validate';
-      }
-      render();
+
+    function renderVendors() {
+  const app = document.getElementById('app');
+  app.innerHTML = `
+    <div class="flex flex-col items-center justify-center h-[60vh] space-y-6">
+      <h2 class="text-2xl font-bold text-primary-700">Vendor Management Login</h2>
+      <p class="text-steel-600">Please select your role to continue:</p>
+      <div class="flex flex-wrap justify-center gap-4 mt-4">
+        <button onclick="openAuthModal('user')" class="px-6 py-3 rounded-xl bg-primary-600 text-white hover:bg-primary-700 shadow-soft">User Login</button>
+        <button onclick="openAuthModal('admin')" class="px-6 py-3 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 shadow-soft">Admin Login</button>
+        <button onclick="openAuthModal('vendor')" class="px-6 py-3 rounded-xl bg-amber-600 text-white hover:bg-amber-700 shadow-soft">Vendor Login</button>
+      </div>
+    </div>
+  `;
+}
+
+// Simple modal-like login popup
+function openAuthModal() {
+  const app = document.getElementById('app');
+  app.innerHTML = `
+    <div class="flex flex-col items-center justify-center h-[70vh] space-y-4 p-6 border rounded-lg shadow-lg w-[400px] mx-auto bg-white">
+      <div class="flex justify-around w-full mb-4">
+        <button id="loginTab" class="tab-btn border-b-2 border-blue-500 font-semibold">Login</button>
+      </div>
+
+      <div id="loginForm">
+        <form id="loginFormElement" class="flex flex-col space-y-4">
+          <input type="email" placeholder="Email" id="loginEmail" required class="input-field border p-2 rounded"/>
+          <input type="password" placeholder="Password" id="loginPassword" required class="input-field border p-2 rounded"/>
+          <select id="loginRole" class="border p-2 rounded">
+            <option value="admin">Admin</option>
+            <option value="vendor">Vendor</option>
+            <option value="user">User</option>
+          </select>
+          <button type="submit" id="loginBtn" class="btn-primary bg-blue-500 text-white py-2 rounded hover:bg-blue-600">Login</button>
+        </form>
+      </div>
+    </div>
+  `;
+
+  // Tab switching
+  const loginTab = document.getElementById('loginTab');
+  const loginForm = document.getElementById('loginForm');
+  loginTab.addEventListener('click', () => {
+    loginForm.classList.remove('hidden');
+    loginTab.classList.add('border-b-2', 'border-blue-500', 'font-semibold');
+    loginTab.classList.remove('text-gray-500');
+  });
+
+  // Add event listener to login button
+  const loginFormElement = document.getElementById('loginFormElement');
+  loginFormElement.addEventListener('submit', handleLogin);
+}
+
+// ----------------------------
+// Login function
+// ----------------------------
+const API_BASE = "http://localhost:8000";
+
+async function handleLogin(e) {
+  e.preventDefault();
+
+  const email = document.getElementById("loginEmail").value;
+  const password = document.getElementById("loginPassword").value;
+  const selectedRole = document.getElementById("loginRole").value; // get selected role
+
+  try {
+    const response = await fetch(`${API_BASE}/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password, role: selectedRole }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      alert("Login failed: " + data.detail);
+      return;
     }
 
-    function setAdminStep(step) {
-      store.admin.currentStep = step;
-      render();
-    }
+    localStorage.setItem("token", data.access_token);
+    localStorage.setItem("role", data.role);
 
-    function selectAdminRequest(id) {
-      store.admin.currentRequestId = id;
-      store.admin.currentStep = 'Validate';
-      render();
+    alert(`Welcome ${data.role}!`);
+
+    // Redirect or switch UI based on the selected role
+    switch (selectedRole.toLowerCase()) {
+      case "admin":
+        setRole("Admin");   // switch to admin tab context
+        window.location.href = "admin_dashboard.html";
+        break;
+      case "vendor":
+        setRole("Vendor");  // switch to vendor tab context
+        window.location.href = "vendor_dashboard.html";
+        break;
+      case "user":
+      default:
+        setRole("User");    // switch to user tab context
+        window.location.href = "user_dashboard.html";
+        break;
     }
+  } catch (err) {
+    console.error("Login error:", err);
+    alert("Unable to login. Please try again later.");
+  }
+}
 
     function badge(text, color='brand') {
       return `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-${color}-100 text-${color}-800 border border-${color}-200">${text}</span>`;
@@ -2671,12 +2756,19 @@
     // Role Tabs + Rendering
     // ----------------------------
     function renderRoleTabs() {
-      const tabs = document.getElementById('roleTabs');
-      const roles = ['User','Admin','Vendor'];
-      tabs.innerHTML = roles.map(r => `
-        <button onclick="setRole('${r}')" class="px-3 py-1.5 rounded-full text-sm font-medium border transition ${store.role===r ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'}">${r}</button>
-      `).join('');
-    }
+  const tabs = document.getElementById('roleTabs');
+  const roles = ['User', 'Admin', 'Vendor'];
+  
+  tabs.innerHTML = roles.map(r => `
+    <button 
+      onclick="openAuthModal('${r.toLowerCase()}')" 
+      class="px-3 py-1.5 rounded-full text-sm font-medium border transition 
+        ${store.role === r ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'}"
+    >
+      ${r}
+    </button>
+  `).join('');
+}
 
     function render() {
       renderRoleTabs();
@@ -2919,5 +3011,5 @@
 }
 
   </script>
-<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'983768fd46ae47d4',t:'MTc1ODYwMjkxMC4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'983768fd46ae47d4',t:'MTc1ODYwMjkxMC4wMDAwMDA='};var a=document.createElement('script');a.nonce='';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
