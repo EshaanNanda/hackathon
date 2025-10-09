@@ -1,0 +1,13 @@
+fastapi
+uvicorn[standard]
+supabase
+python-dotenv
+langchain
+langchain-community
+langgraph
+pypdf
+tiktoken
+pgvector
+psycopg2-binary
+pydantic
+python-multipart

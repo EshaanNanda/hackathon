@@ -1,0 +1,3766 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>AutonomiQ Audit AI — Internal Audit Suite</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
+          colors: {
+            primary: {
+              50: '#eef4ff',
+              100: '#e0eaff',
+              200: '#c7d7ff',
+              300: '#a4bbff',
+              400: '#7b96ff',
+              500: '#4f73f5',
+              600: '#2157d5', // Automotive blue
+              700: '#1541a6',
+              800: '#0f327f',
+              900: '#0a2761',
+            },
+            steel: {
+              50: '#f6f7f9',
+              100: '#eceef2',
+              200: '#d9dde6',
+              300: '#b9c0cf',
+              400: '#96a0b2',
+              500: '#738198',
+              600: '#59667c',
+              700: '#485364',
+              800: '#36404b',
+              900: '#242b34',
+            },
+            brand: {
+              50: '#eef2ff',
+              100: '#e0e7ff',
+              200: '#c7d2fe',
+              300: '#a5b4fc',
+              400: '#818cf8',
+              500: '#6366f1',
+              600: '#4f46e5',
+              700: '#4338ca',
+              800: '#3730a3',
+              900: '#312e81',
+            },
+            accent: {
+              50: '#ecfeff',
+              100: '#cffafe',
+              200: '#a5f3fc',
+              300: '#67e8f9',
+              400: '#22d3ee',
+              500: '#06b6d4',
+              600: '#0891b2',
+              700: '#0e7490',
+              800: '#155e75',
+              900: '#164e63',
+            },
+            compliant: '#10B981', // green
+            warning: '#F59E0B',   // yellow
+            critical: '#EF4444',  // red
+            esg: '#22C55E',
+          },
+          boxShadow: {
+            soft: '0 8px 24px rgba(20, 40, 80, 0.08)',
+            card: '0 10px 30px rgba(15, 23, 42, 0.08)',
+            inset: 'inset 0 1px 0 rgba(255,255,255,0.1)',
+          },
+          borderRadius: {
+            xl2: '1rem',
+            xl3: '1.25rem',
+          },
+        }
+      },
+      darkMode: 'class'
+    }
+  </script>
+  <style>
+    html, body { height: 100%; }
+    /* Decorative conic rings */
+    .ring-conic { background: conic-gradient(var(--ring-color) calc(var(--pct, 0) * 1%), #e5e7eb 0); }
+    .dark .ring-conic { background: conic-gradient(var(--ring-color) calc(var(--pct, 0) * 1%), #1f2937 0); }
+    /* Nice scrollbars */
+    * { scrollbar-width: thin; scrollbar-color: #9AA4B2 transparent; }
+    *::-webkit-scrollbar { height: 8px; width: 10px; }
+    *::-webkit-scrollbar-thumb { background: #9AA4B2; border-radius: 999px; }
+    *::-webkit-scrollbar-track { background: transparent; }
+    /* Heatmap hover */
+    .heat-cell:hover { transform: translateY(-2px); }
+    /* Floating chat open state */
+    .chat-open { transform: translateY(0); opacity: 1; pointer-events: auto; }
+    .chat-closed { transform: translateY(20px); opacity: 0; pointer-events: none; }
+    /* Subtle gradient bg */
+    .bg-grid {
+      background:
+        radial-gradient(1000px 400px at 10% -10%, rgba(33,87,213,0.10), transparent 60%),
+        radial-gradient(900px 400px at 110% 10%, rgba(115,129,152,0.08), transparent 70%),
+        linear-gradient(180deg, rgba(255,255,255,0.65), rgba(255,255,255,0.25));
+    }
+    .dark .bg-grid {
+      background:
+        radial-gradient(1000px 400px at 10% -10%, rgba(79,115,245,0.18), transparent 60%),
+        radial-gradient(900px 400px at 110% 10%, rgba(54,64,75,0.35), transparent 70%),
+        linear-gradient(180deg, rgba(15,23,42,0.65), rgba(15,23,42,0.25));
+    }
+    /* Card hover */
+    .card-hover { transition: transform .25s ease, box-shadow .25s ease; }
+    .card-hover:hover { transform: translateY(-3px); box-shadow: 0 16px 40px rgba(15,23,42,0.12); }
+    /* Badge glow */
+    .glow-green { box-shadow: 0 0 0 3px rgba(16,185,129,0.15); }
+    .glow-yellow { box-shadow: 0 0 0 3px rgba(245,158,11,0.18); }
+    .glow-red { box-shadow: 0 0 0 3px rgba(239,68,68,0.2); }
+  </style>
+</head>
+<body class="bg-grid text-steel-900 dark:text-steel-100 dark:bg-steel-900/80">
+  <!-- Shell -->
+  <div class="min-h-full flex">
+
+    <!-- Sidebar -->
+    <aside class="hidden lg:flex lg:flex-col w-[300px] bg-white/80 backdrop-blur-md dark:bg-steel-800/70 border-r border-steel-100 dark:border-steel-700">
+      <div class="flex items-center gap-3 p-5">
+        <!-- Wheel-like brand SVG -->
+        <div class="h-10 w-10 rounded-full bg-primary-600 flex items-center justify-center text-white shadow-card">
+          <svg viewBox="0 0 24 24" class="h-6 w-6"><path fill="currentColor" d="M12 2a10 10 0 1 0 .001 20.001A10 10 0 0 0 12 2Zm0 2a8 8 0 0 1 7.529 5.5H16.5a4.5 4.5 0 0 0-9 0H4.47A8 8 0 0 1 12 4Zm0 16a8 8 0 0 1-7.53-5.5H7.5a4.5 4.5 0 0 0 9 0h3a8 8 0 0 1-7.5 5.5Z"/></svg>
+        </div>
+        <div>
+          <div class="text-lg font-extrabold leading-tight">AutonomiQ</div>
+          <div class="text-xs uppercase tracking-widest text-steel-500">Audit AI Suite</div>
+        </div>
+      </div>
+
+      <nav class="px-3">
+        <ul id="navList" class="space-y-1">
+          <!-- Nav items injected by JS for active state handling -->
+        </ul>
+      </nav>
+
+      <div class="mt-auto p-4 space-y-3">
+        <div class="p-3 rounded-xl2 bg-primary-50 dark:bg-steel-700/60 border border-primary-100 dark:border-steel-600">
+          <div class="text-xs uppercase tracking-widest text-primary-700 dark:text-primary-300 mb-1">Environment</div>
+          <div class="flex items-center gap-2 text-sm">
+            <span class="size-2.5 rounded-full bg-green-500 glow-green"></span>
+            Production
+          </div>
+        </div>
+        <div class="text-[11px] text-steel-500">This is a demo UI. Some features simulate behavior locally.</div>
+      </div>
+    </aside>
+
+    <!-- Main -->
+    <div class="flex-1 flex flex-col">
+      <!-- Top bar -->
+      <header class="sticky top-0 z-30 backdrop-blur-md bg-white/70 dark:bg-steel-900/70 border-b border-steel-100 dark:border-steel-800">
+        <div class="max-w-[1400px] mx-auto px-4">
+          <div class="h-16 flex items-center justify-between">
+            <!-- Mobile menu -->
+            <button id="mobileMenuBtn" class="lg:hidden inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-steel-200 dark:border-steel-700 text-steel-700 dark:text-steel-100 bg-white dark:bg-steel-800">
+              <svg class="h-5 w-5" viewBox="0 0 24 24" fill="currentColor"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+              Menu
+            </button>
+            <!-- Breadcrumb / page title -->
+            <div class="flex items-center gap-3">
+              <div class="hidden md:flex items-center gap-2 text-sm text-steel-600 dark:text-steel-300">
+                <span id="pageIcon" class="inline-flex items-center justify-center size-7 rounded-md bg-primary-600 text-white shadow-soft"></span>
+                <span id="pageTitle" class="text-base md:text-lg font-semibold">Dashboard</span>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <!-- Global search -->
+              <div class="hidden md:flex items-center relative">
+                <input id="globalSearch" type="search" placeholder="Search audits, agents, risks..."
+                  class="w-72 px-10 py-2 rounded-xl bg-white/80 dark:bg-steel-800 border border-steel-200 dark:border-steel-700 placeholder:text-steel-400 focus:outline-none focus:ring-2 focus:ring-primary-500">
+                <svg class="h-5 w-5 absolute left-3 text-steel-400" viewBox="0 0 24 24" fill="currentColor"><path d="M11 4a7 7 0 1 1 0 14 7 7 0 0 1 0-14Zm6.32 12.9 3.39 3.39-1.42 1.42-3.39-3.39"/></svg>
+              </div>
+              <!-- Dark mode toggle -->
+              <button id="themeToggle" class="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-steel-200 dark:border-steel-700 text-steel-700 dark:text-steel-100 bg-white dark:bg-steel-800">
+                <svg id="sunIcon" class="h-5 w-5 hidden" viewBox="0 0 24 24" fill="currentColor"><path d="M6.76 4.84 5.34 3.42 3.92 4.84l1.42 1.42 1.42-1.42zM1 13h3v-2H1v2zm10 10h2v-3h-2v3zm9-10v2h3v-2h-3zM17.24 4.84l1.42 1.42 1.42-1.42-1.42-1.42-1.42 1.42zM12 6a6 6 0 1 0 .001 12.001A6 6 0 0 0 12 6zm8.08 11.08-1.42 1.42 1.42 1.42 1.42-1.42-1.42-1.42zM4.84 17.24 3.42 18.66l1.42 1.42 1.42-1.42-1.42-1.42z"/></svg>
+                <svg id="moonIcon" class="h-5 w-5" viewBox="0 0 24 24" fill="currentColor"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+                <span class="hidden sm:inline">Theme</span>
+              </button>
+              <!-- Notifications -->
+              <div class="relative">
+                <button id="bellBtn" class="inline-flex items-center justify-center size-10 rounded-full border border-steel-200 dark:border-steel-700 bg-white dark:bg-steel-800 relative">
+                  <svg class="h-5 w-5 text-steel-700 dark:text-steel-100" viewBox="0 0 24 24" fill="currentColor"><path d="M12 22a2 2 0 0 0 2-2h-4a2 2 0 0 0 2 2Zm6-6V11a6 6 0 0 0-12 0v5l-2 2v1h16v-1l-2-2Z"/></svg>
+                  <span id="notifDot" class="absolute -top-0.5 -right-0.5 size-3 bg-critical rounded-full ring-2 ring-white dark:ring-steel-900"></span>
+                </button>
+                <!-- Dropdown -->
+                <div id="notifMenu" class="hidden absolute right-0 mt-2 w-96 max-w-[90vw] bg-white dark:bg-steel-800 border border-steel-200 dark:border-steel-700 rounded-xl2 shadow-card overflow-hidden">
+                  <div class="px-4 py-3 flex items-center justify-between">
+                    <div class="font-semibold">Alerts</div>
+                    <a href="#alerts" class="text-primary-600 hover:underline" onclick="navigate('alerts')">Open Center</a>
+                  </div>
+                  <div id="notifList" class="max-h-80 overflow-auto divide-y divide-steel-100 dark:divide-steel-700"></div>
+                </div>
+              </div>
+              <!-- Profile -->
+              <div class="hidden md:flex items-center gap-3 pl-2 ml-2 border-l border-steel-200 dark:border-steel-700">
+                <div class="text-right">
+                  <div class="text-sm font-semibold">Alex Rivera</div>
+                  <div class="text-xs text-steel-500">Chief Audit Exec</div>
+                </div>
+                <div class="size-10 rounded-full bg-gradient-to-br from-primary-600 to-primary-800 text-white flex items-center justify-center font-bold">AR</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <!-- Mobile Drawer -->
+      <div id="mobileDrawer" class="lg:hidden fixed inset-0 z-40 hidden">
+        <div class="absolute inset-0 bg-black/30" onclick="toggleMobile(false)"></div>
+        <div class="absolute left-0 top-0 bottom-0 w-[85%] max-w-[320px] bg-white dark:bg-steel-800 p-4">
+          <div class="flex items-center justify-between mb-4">
+            <div class="flex items-center gap-3">
+              <div class="h-9 w-9 rounded-full bg-primary-600 text-white flex items-center justify-center">A</div>
+              <div class="font-bold">AutonomiQ</div>
+            </div>
+            <button class="p-2 rounded-lg border border-steel-200 dark:border-steel-700" onclick="toggleMobile(false)">Close</button>
+          </div>
+          <ul id="navListMobile" class="space-y-1"></ul>
+        </div>
+      </div>
+
+      <!-- Content -->
+      <main class="flex-1">
+        <div class="max-w-[1400px] mx-auto p-4 md:p-6 space-y-8">
+          <!-- 1. Landing Dashboard (Executives) -->
+          <section id="page-dashboard" class="space-y-6">
+            <!-- Quick Actions -->
+            <div class="flex flex-wrap gap-3">
+              <button id="btnAudit" class="px-4 py-2.5 rounded-xl bg-primary-600 text-white shadow-soft hover:bg-primary-700">Run Instant Audit</button>
+              <button id="btnReport" class="px-4 py-2.5 rounded-xl border border-steel-200 dark:border-steel-700 bg-white dark:bg-steel-800 hover:bg-steel-50 dark:hover:bg-steel-700">Generate Report</button>
+              <button id="btnAssistant" class="px-4 py-2.5 rounded-xl border border-primary-200 dark:border-primary-800 text-primary-700 dark:text-primary-300 bg-primary-50 dark:bg-primary-900/20 hover:bg-primary-100 dark:hover:bg-primary-900/30">Ask Audit Assistant</button>
+            </div>
+
+            <!-- KPIs -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+              <!-- Compliance Score -->
+              <div class="card-hover p-5 rounded-xl2 bg-white/90 dark:bg-steel-800/70 border border-steel-100 dark:border-steel-700 shadow-soft">
+                <div class="flex items-center justify-between">
+                  <div class="text-sm text-steel-500">Compliance Score</div>
+                  <span class="text-xs px-2 py-1 rounded-full bg-green-50 text-green-700 border border-green-200 dark:bg-steel-700 dark:text-green-300 dark:border-steel-600">Healthy</span>
+                </div>
+                <div class="mt-4 flex items-center gap-5">
+                  <div class="relative size-20 rounded-full ring-conic" style="--ring-color:#10B981; --pct:86;">
+                    <div class="absolute inset-1 rounded-full bg-white dark:bg-steel-900 flex items-center justify-center text-xl font-semibold">86%</div>
+                  </div>
+                  <div class="text-sm">
+                    <div class="text-steel-600 dark:text-steel-300">↑ 3% vs last month</div>
+                    <div class="mt-2 h-10 w-28">
+                      <svg viewBox="0 0 100 30" class="h-full w-full">
+                        <polyline fill="none" stroke="#10B981" stroke-width="3" points="0,25 15,18 30,22 45,15 60,17 75,10 90,12 100,8"/>
+                      </svg>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- High-Risk Transactions -->
+              <div class="card-hover p-5 rounded-xl2 bg-white/90 dark:bg-steel-800/70 border border-steel-100 dark:border-steel-700 shadow-soft">
+                <div class="flex items-center justify-between">
+                  <div class="text-sm text-steel-500">High-Risk Transactions</div>
+                  <span class="size-2.5 bg-critical rounded-full glow-red"></span>
+                </div>
+                <div class="mt-4 flex items-end justify-between">
+                  <div class="text-3xl font-extrabold">128</div>
+                  <div class="text-xs text-critical">+18 this week</div>
+                </div>
+                <div class="mt-4 grid grid-cols-8 gap-1">
+                  <!-- mini bars -->
+                  <div class="h-8 bg-critical/70 rounded"></div>
+                  <div class="h-5 bg-critical/50 rounded"></div>
+                  <div class="h-7 bg-critical/60 rounded"></div>
+                  <div class="h-10 bg-critical/80 rounded"></div>
+                  <div class="h-6 bg-critical/60 rounded"></div>
+                  <div class="h-9 bg-critical/70 rounded"></div>
+                  <div class="h-4 bg-critical/40 rounded"></div>
+                  <div class="h-8 bg-critical/70 rounded"></div>
+                </div>
+              </div>
+
+              <!-- Open Findings -->
+              <div class="card-hover p-5 rounded-xl2 bg-white/90 dark:bg-steel-800/70 border border-steel-100 dark:border-steel-700 shadow-soft">
+                <div class="flex items-center justify-between">
+                  <div class="text-sm text-steel-500">Open Findings</div>
+                  <span class="size-2.5 bg-warning rounded-full glow-yellow"></span>
+                </div>
+                <div class="mt-4 flex items-end justify-between">
+                  <div class="text-3xl font-extrabold">42</div>
+                  <div class="text-xs text-warning">7 near due</div>
+                </div>
+                <div class="mt-4 flex gap-2">
+                  <span class="text-xs px-2 py-1 rounded-full bg-red-50 text-red-700 border border-red-200 dark:bg-steel-700 dark:text-red-300 dark:border-steel-600">Critical 5</span>
+                  <span class="text-xs px-2 py-1 rounded-full bg-yellow-50 text-yellow-700 border border-yellow-200 dark:bg-steel-700 dark:text-yellow-300 dark:border-steel-600">High 17</span>
+                  <span class="text-xs px-2 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200 dark:bg-steel-700 dark:text-blue-300 dark:border-steel-600">Medium 20</span>
+                </div>
+              </div>
+
+              <!-- ESG Risk -->
+              <div class="card-hover p-5 rounded-xl2 bg-white/90 dark:bg-steel-800/70 border border-steel-100 dark:border-steel-700 shadow-soft">
+                <div class="flex items-center justify-between">
+                  <div class="text-sm text-steel-500">ESG Risk Index</div>
+                  <span class="text-xs px-2 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-steel-700 dark:text-emerald-300 dark:border-steel-600">Low</span>
+                </div>
+                <div class="mt-3">
+                  <div class="h-2 rounded-full bg-steel-100 dark:bg-steel-700 overflow-hidden">
+                    <div class="h-2 bg-gradient-to-r from-esg via-yellow-400 to-critical rounded-full" style="width: 32%"></div>
+                  </div>
+                  <div class="mt-2 text-sm flex items-center justify-between">
+                    <span>Score 0.32</span><span class="text-steel-500">Target <span class="font-medium">≤ 0.40</span></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Risk Heatmap + Timeline -->
+            <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
+              <!-- Heatmap -->
+              <div class="xl:col-span-2 p-5 rounded-xl2 bg-white/90 dark:bg-steel-800/70 border border-steel-100 dark:border-steel-700 shadow-soft">
+                <div class="flex items-center justify-between">
+                  <div class="font-semibold">Risk Heatmap</div>
+                  <div class="text-xs text-steel-500">Processes × Risk Level</div>
+                </div>
+                <div id="heatmap" class="mt-4 grid grid-cols-7 gap-2">
+                  <!-- headers -->
+                  <div></div>
+                  <div class="text-xs text-steel-500 text-center">Very Low</div>
+                  <div class="text-xs text-steel-500 text-center">Low</div>
+                  <div class="text-xs text-steel-500 text-center">Moderate</div>
+                  <div class="text-xs text-steel-500 text-center">Elevated</div>
+                  <div class="text-xs text-steel-500 text-center">High</div>
+                  <div class="text-xs text-steel-500 text-center">Severe</div>
+                </div>
+                <div id="heatRows" class="mt-2 space-y-2"></div>
+                <div id="heatInfo" class="mt-3 text-sm text-steel-600 dark:text-steel-300"></div>
+              </div>
+
+              <!-- Timeline -->
+              <div class="p-5 rounded-xl2 bg-white/90 dark:bg-steel-800/70 border border-steel-100 dark:border-steel-700 shadow-soft">
+                <div class="flex items-center justify-between">
+                  <div class="font-semibold">Anomaly Timeline</div>
+                  <div class="text-xs text-steel-500">Last 14 days</div>
+                </div>
+                <div class="mt-4 overflow-x-auto">
+                  <div id="timeline" class="flex items-end gap-3 min-w-[560px]"></div>
+                </div>
+                <div id="timelineInfo" class="mt-3 text-sm text-steel-600 dark:text-steel-300"></div>
+              </div>
+            </div>
+          </section>
+
+          <!-- 2. Agent Hub -->
+          <section id="page-agents" class="hidden space-y-6">
+            <div class="grid grid-cols-1 lg:grid-cols-4 gap-4">
+              <div class="lg:col-span-3 space-y-4">
+                <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4" id="agentGrid">
+                  <!-- agent cards populated by JS -->
+                </div>
+              </div>
+              <div class="lg:col-span-1 p-5 rounded-xl2 bg-white/90 dark:bg-steel-800/70 border border-steel-100 dark:border-steel-700 shadow-soft">
+                <div class="flex items-center justify-between">
+                  <div class="font-semibold">Collaboration Feed</div>
+                  <div class="text-xs text-steel-500">Live</div>
+                </div>
+                <div id="collabFeed" class="mt-4 space-y-3 max-h-[520px] overflow-auto"></div>
+              </div>
+            </div>
+          </section>
+
+          <!-- 3. Audit Exploration -->
+          <section id="page-explore" class="hidden space-y-6">
+            <div class="flex flex-col lg:flex-row gap-4">
+              <form id="exploreSearchForm" class="flex-1 flex items-center gap-2" onsubmit="event.preventDefault(); applyExploreFilters();">
+                <div class="relative flex-1">
+                  <input id="exploreSearch" type="search" placeholder="Search transactions, processes, vendors..." class="w-full px-10 py-2.5 rounded-xl bg-white/90 dark:bg-steel-800/70 border border-steel-200 dark:border-steel-700">
+                  <svg class="h-5 w-5 absolute left-3 top-2.5 text-steel-400" viewBox="0 0 24 24" fill="currentColor"><path d="M11 4a7 7 0 1 1 0 14 7 7 0 0 1 0-14Zm6.32 12.9 3.39 3.39-1.42 1.42-3.39-3.39"/></svg>
+                </div>
+                <select id="filterRisk" class="px-3 py-2.5 rounded-xl bg-white/90 dark:bg-steel-800/70 border border-steel-200 dark:border-steel-700">
+                  <option value="">Risk: Any</option>
+                  <option>Low</option>
+                  <option>Medium</option>
+                  <option>High</option>
+                  <option>Critical</option>
+                </select>
+                <select id="filterProcess" class="px-3 py-2.5 rounded-xl bg-white/90 dark:bg-steel-800/70 border border-steel-200 dark:border-steel-700">
+                  <option value="">Process: Any</option>
+                  <option>Procure-to-Pay</option>
+                  <option>Order-to-Cash</option>
+                  <option>Record-to-Report</option>
+                  <option>IT Change</option>
+                </select>
+                <button class="px-4 py-2.5 rounded-xl bg-primary-600 text-white">Filter</button>
+              </form>
+            </div>
+
+            <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
+              <!-- Table -->
+              <div class="xl:col-span-2 p-5 rounded-xl2 bg-white/90 dark:bg-steel-800/70 border border-steel-100 dark:border-steel-700 shadow-soft">
+                <div class="flex items-center justify-between">
+                  <div class="font-semibold">Anomalies</div>
+                  <div class="text-xs text-steel-500">Click a row to explain</div>
+                </div>
+                <div class="mt-3 overflow-auto">
+                  <table class="w-full text-sm">
+                    <thead class="text-steel-500">
+                      <tr class="border-b border-steel-100 dark:border-steel-700">
+                        <th class="text-left py-2 px-2">ID</th>
+                        <th class="text-left py-2 px-2 cursor-pointer" onclick="sortTable('amount')">Amount</th>
+                        <th class="text-left py-2 px-2">Process</th>
+                        <th class="text-left py-2 px-2 cursor-pointer" onclick="sortTable('risk')">Risk</th>
+                        <th class="text-left py-2 px-2">Agent</th>
+                        <th class="text-left py-2 px-2">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody id="anomalyTbody" class="divide-y divide-steel-100 dark:divide-steel-700"></tbody>
+                  </table>
+                </div>
+              </div>
+
+              <!-- Process Mining Diagram -->
+              <div class="p-5 rounded-xl2 bg-white/90 dark:bg-steel-800/70 border border-steel-100 dark:border-steel-700 shadow-soft">
+                <div class="flex items-center justify-between">
+                  <div class="font-semibold">Process Mining</div>
+                  <div class="flex items-center gap-2 text-xs">
+                    <label class="inline-flex items-center gap-1"><input type="checkbox" id="toggleAsIs" checked class="accent-primary-600">As-Is</label>
+                    <label class="inline-flex items-center gap-1"><input type="checkbox" id="toggleAsDesigned" checked class="accent-primary-600">As-Designed</label>
+                  </div>
+                </div>
+                <div id="processCanvas" class="mt-3 p-3 rounded-xl bg-steel-50 dark:bg-steel-900/40 border border-steel-100 dark:border-steel-700">
+                  <!-- Flow SVG -->
+                  <svg viewBox="0 0 700 240" class="w-full h-[240px]">
+                    <!-- As-Designed (solid blue) -->
+                    <g id="flowDesigned" stroke="#2157d5" stroke-width="2" fill="none">
+                      <rect x="20" y="30" width="120" height="40" rx="10" fill="white" class="dark:fill-steel-800" />
+                      <text x="80" y="55" text-anchor="middle" fill="#2157d5" font-size="12">Order</text>
+                      <line x1="140" y1="50" x2="220" y2="50"/>
+                      <polygon points="220,50 210,45 210,55" fill="#2157d5"/>
+                      <rect x="220" y="30" width="140" height="40" rx="10" fill="white" class="dark:fill-steel-800"/>
+                      <text x="290" y="55" text-anchor="middle" fill="#2157d5" font-size="12">Approve</text>
+                      <line x1="360" y1="50" x2="450" y2="50"/>
+                      <polygon points="450,50 440,45 440,55" fill="#2157d5"/>
+                      <rect x="450" y="30" width="120" height="40" rx="10" fill="white" class="dark:fill-steel-800"/>
+                      <text x="510" y="55" text-anchor="middle" fill="#2157d5" font-size="12">Invoice</text>
+                      <line x1="570" y1="50" x2="650" y2="50"/>
+                      <polygon points="650,50 640,45 640,55" fill="#2157d5"/>
+                      <rect x="650" y="30" width="120" height="40" rx="10" fill="white" class="dark:fill-steel-800"/>
+                      <text x="710" y="55" text-anchor="middle" fill="#2157d5" font-size="12">Pay</text>
+                    </g>
+
+                    <!-- As-Is (dashed warning) -->
+                    <g id="flowAsIs" stroke="#F59E0B" stroke-dasharray="5 4" stroke-width="2" fill="none">
+                      <rect x="20" y="140" width="120" height="40" rx="10" fill="white" class="dark:fill-steel-800" />
+                      <text x="80" y="165" text-anchor="middle" fill="#F59E0B" font-size="12">Order</text>
+                      <line x1="140" y1="160" x2="220" y2="160"/>
+                      <polygon points="220,160 210,155 210,165" fill="#F59E0B"/>
+                      <rect x="220" y="140" width="140" height="40" rx="10" fill="white" class="dark:fill-steel-800"/>
+                      <text x="290" y="165" text-anchor="middle" fill="#F59E0B" font-size="12">Approve (Skipped)</text>
+                      <line x1="360" y1="160" x2="450" y2="160"/>
+                      <polygon points="450,160 440,155 440,165" fill="#F59E0B"/>
+                      <rect x="450" y="140" width="120" height="40" rx="10" fill="white" class="dark:fill-steel-800"/>
+                      <text x="510" y="165" text-anchor="middle" fill="#F59E0B" font-size="12">Invoice</text>
+                      <line x1="570" y1="160" x2="650" y2="160"/>
+                      <polygon points="650,160 640,155 640,165" fill="#F59E0B"/>
+                      <rect x="650" y="140" width="120" height="40" rx="10" fill="white" class="dark:fill-steel-800"/>
+                      <text x="710" y="165" text-anchor="middle" fill="#F59E0B" font-size="12">Pay</text>
+                    </g>
+                  </svg>
+                </div>
+                <div class="mt-2 text-sm text-steel-600 dark:text-steel-300">Dashed path indicates deviations (e.g., skipped approval) detected by Process Miner.</div>
+              </div>
+            </div>
+
+            <!-- Case Timeline -->
+            <div class="p-5 rounded-xl2 bg-white/90 dark:bg-steel-800/70 border border-steel-100 dark:border-steel-700 shadow-soft">
+              <div class="flex items-center justify-between">
+                <div class="font-semibold">Case Timeline</div>
+                <div class="text-xs text-steel-500">Click an event to view evidence</div>
+              </div>
+              <div id="caseTimeline" class="mt-3 flex flex-col md:flex-row md:items-center gap-4 md:gap-10"></div>
+            </div>
+          </section>
+
+          <!-- 4. Risk & Compliance Dashboard -->
+          <section id="page-risk" class="hidden space-y-6">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              <!-- Vendor Risk Heatmap -->
+              <div class="p-5 rounded-xl2 bg-white/90 dark:bg-steel-800/70 border border-steel-100 dark:border-steel-700 shadow-soft">
+                <div class="font-semibold">Vendor Risk</div>
+                <div id="vendorHeat" class="mt-3 grid grid-cols-6 gap-2"></div>
+              </div>
+              <!-- Department Risk Heatmap -->
+              <div class="p-5 rounded-xl2 bg-white/90 dark:bg-steel-800/70 border border-steel-100 dark:border-steel-700 shadow-soft">
+                <div class="font-semibold">Department Risk</div>
+                <div id="deptHeat" class="mt-3 grid grid-cols-6 gap-2"></div>
+              </div>
+              <!-- Anomaly Clusters -->
+              <div class="p-5 rounded-xl2 bg-white/90 dark:bg-steel-800/70 border border-steel-100 dark:border-steel-700 shadow-soft">
+                <div class="font-semibold">Anomaly Clusters</div>
+                <div id="clusterWrap" class="mt-3 flex flex-wrap gap-2"></div>
+                <div class="mt-3 text-xs text-steel-500">Hover to see cluster size and dominant risk.</div>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              <!-- Compliance Tracker -->
+              <div class="lg:col-span-2 p-5 rounded-xl2 bg-white/90 dark:bg-steel-800/70 border border-steel-100 dark:border-steel-700 shadow-soft">
+                <div class="flex items-center justify-between">
+                  <div class="font-semibold">Compliance Tracker</div>
+                  <button class="text-primary-600 text-sm underline" onclick="openChecklist()">Drill-down checklist</button>
+                </div>
+                <div id="complianceList" class="mt-4 space-y-4"></div>
+              </div>
+              <!-- Notes -->
+              <div class="p-5 rounded-xl2 bg-white/90 dark:bg-steel-800/70 border border-steel-100 dark:border-steel-700 shadow-soft">
+                <div class="font-semibold">Highlights</div>
+                <ul class="mt-3 text-sm list-disc pl-5 space-y-1 text-steel-700 dark:text-steel-200">
+                  <li>GDPR trending to green with DPIA improvements</li>
+                  <li>SOX ITGC controls need remediation in Change Mgmt</li>
+                  <li>Supplier onboarding checks reduced false positives</li>
+                </ul>
+              </div>
+            </div>
+          </section>
+
+          <!-- 6. Report & Evidence Management -->
+          <section id="page-reports" class="hidden space-y-6">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              <!-- Report previews -->
+              <div class="lg:col-span-2 p-5 rounded-xl2 bg-white/90 dark:bg-steel-800/70 border border-steel-100 dark:border-steel-700 shadow-soft">
+                <div class="flex items-center justify-between">
+                  <div class="font-semibold">Automated Reports (Demo)</div>
+                  <div class="text-xs text-steel-500">Preview & download sample</div>
+                </div>
+                <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4" id="reportGrid"></div>
+              </div>
+
+              <!-- Evidence Locker -->
+              <div class="p-5 rounded-xl2 bg-white/90 dark:bg-steel-800/70 border border-steel-100 dark:border-steel-700 shadow-soft">
+                <div class="flex items-center justify-between">
+                  <div class="font-semibold">Evidence Locker</div>
+                  <label class="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-steel-200 dark:border-steel-700 bg-white dark:bg-steel-800 cursor-pointer">
+                    <svg class="h-5 w-5 text-primary-600" viewBox="0 0 24 24" fill="currentColor"><path d="M13 11h8v2h-8v8h-2v-8H3v-2h8V3h2v8z"/></svg>
+                    <span class="text-sm">Add</span>
+                    <input id="evidenceInput" type="file" class="hidden" multiple>
+                  </label>
+                </div>
+                <div class="mt-3">
+                  <div id="evidenceTags" class="flex flex-wrap gap-2"></div>
+                </div>
+                <div id="evidenceList" class="mt-4 space-y-2 max-h-[420px] overflow-auto"></div>
+                <div class="mt-2 text-[11px] text-steel-500">Local-only demo: files are not uploaded.</div>
+              </div>
+            </div>
+
+            <!-- Remediation Tracker -->
+            <div class="p-5 rounded-xl2 bg-white/90 dark:bg-steel-800/70 border border-steel-100 dark:border-steel-700 shadow-soft">
+              <div class="flex items-center justify-between">
+                <div class="font-semibold">Remediation Tracker</div>
+              </div>
+              <div class="mt-3 overflow-auto">
+                <table class="w-full text-sm">
+                  <thead class="text-steel-500">
+                    <tr class="border-b border-steel-100 dark:border-steel-700">
+                      <th class="text-left py-2 px-2">Finding</th>
+                      <th class="text-left py-2 px-2">Owner</th>
+                      <th class="text-left py-2 px-2">Due</th>
+                      <th class="text-left py-2 px-2">Status</th>
+                      <th class="text-left py-2 px-2">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody id="remediationBody" class="divide-y divide-steel-100 dark:divide-steel-700"></tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+
+          <!-- 7. Alerts & Notifications -->
+          <section id="page-alerts" class="hidden space-y-6">
+            <div class="flex items-center justify-between">
+              <div class="font-semibold text-lg">Alert & Notification Center</div>
+              <div class="flex items-center gap-2">
+                <select id="alertSeverity" class="px-3 py-2.5 rounded-xl bg-white/90 dark:bg-steel-800/70 border border-steel-200 dark:border-steel-700">
+                  <option value="">Severity: All</option>
+                  <option>High</option><option>Medium</option><option>Low</option>
+                </select>
+                <select id="alertAgent" class="px-3 py-2.5 rounded-xl bg-white/90 dark:bg-steel-800/70 border border-steel-200 dark:border-steel-700">
+                  <option value="">Agent: All</option>
+                  <option>Finance</option><option>IT</option><option>Compliance</option><option>IoT</option>
+                </select>
+                <button class="px-4 py-2.5 rounded-xl bg-primary-600 text-white" onclick="filterAlerts()">Filter</button>
+              </div>
+            </div>
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              <div class="lg:col-span-2 space-y-3" id="alertList">
+                <!-- alert groups list -->
+              </div>
+              <div class="p-5 rounded-xl2 bg-white/90 dark:bg-steel-800/70 border border-steel-100 dark:border-steel-700 shadow-soft">
+                <div class="font-semibold">Channels</div>
+                <div class="mt-3 space-y-2 text-sm">
+                  <label class="flex items-center justify-between gap-2 p-2 rounded-lg border border-steel-200 dark:border-steel-700 bg-white/70 dark:bg-steel-900/40">
+                    <div class="flex items-center gap-2">
+                      <span class="px-2 py-0.5 rounded bg-indigo-100 text-indigo-700 text-xs">Teams</span>
+                      Microsoft Teams
+                    </div>
+                    <input id="chTeams" type="checkbox" checked class="accent-primary-600">
+                  </label>
+                  <label class="flex items-center justify-between gap-2 p-2 rounded-lg border border-steel-200 dark:border-steel-700 bg-white/70 dark:bg-steel-900/40">
+                    <div class="flex items-center gap-2">
+                      <span class="px-2 py-0.5 rounded bg-sky-100 text-sky-700 text-xs">Slack</span>
+                      Slack
+                    </div>
+                    <input id="chSlack" type="checkbox" checked class="accent-primary-600">
+                  </label>
+                  <label class="flex items-center justify-between gap-2 p-2 rounded-lg border border-steel-200 dark:border-steel-700 bg-white/70 dark:bg-steel-900/40">
+                    <div class="flex items-center gap-2">
+                      <span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 text-xs">Email</span>
+                      Email
+                    </div>
+                    <input id="chEmail" type="checkbox" class="accent-primary-600">
+                  </label>
+                </div>
+                <div class="mt-3 text-xs text-steel-500">Changes are saved locally for this demo.</div>
+              </div>
+            </div>
+          </section>
+          <!-- 8. VENDOR MANAGEMENT -->
+          <section id="page-vendors" class="page hidden space-y-10 pt-2 relative">
+            <!-- Role tabs are at right-->
+            <div class="absolute top-2 right-2 flex items-center gap-1" id="roleTabs">
+              <!-- Role tabs rendered by JS -->
+            </div>
+            <div id="app" class="space-y-2 mt-2">
+            <!-- Views rendered by JS -->
+            </div>   
+</main>
+
+ <footer class="mt-10 py-6">
+    </footer>
+
+  <!-- Feedback Modal -->
+  <div id="feedbackModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden z-50">
+    <div class="absolute inset-0 flex items-center justify-center px-4">
+      <div class="w-full max-w-md rounded-2xl bg-white p-5 shadow-soft border border-white">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="text-lg font-semibold text-slate-900">Rate your experience</h3>
+          <button onclick="closeFeedback()" class="rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 w-8 h-8">×</button>
+        </div>
+        <form onsubmit="submitFeedback(event)" class="space-y-4">
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1">Rating</label>
+            <div class="flex gap-2">
+              <button type="button" data-star="1" class="star-btn text-2xl">☆</button>
+              <button type="button" data-star="2" class="star-btn text-2xl">☆</button>
+              <button type="button" data-star="3" class="star-btn text-2xl">☆</button>
+              <button type="button" data-star="4" class="star-btn text-2xl">☆</button>
+              <button type="button" data-star="5" class="star-btn text-2xl">☆</button>
+            </div>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1">Feedback</label>
+            <textarea id="feedbackComment" rows="4" placeholder="Tell us how it went..." class="w-full rounded-xl border border-slate-200 px-3 py-2 focus:ring-2 focus:ring-brand-400 outline-none"></textarea>
+          </div>
+          <div class="flex items-center justify-end gap-2">
+            <button type="button" onclick="closeFeedback()" class="rounded-xl bg-white border border-slate-200 px-4 py-2">Cancel</button>
+            <button class="rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5">Submit</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+<div id="aiChatWidget">
+  <div class="chat-header">
+    <h3>🤖 Audit Assistant</h3>
+    <button class="chat-close-btn" onclick="closeAIChat()">×</button>
+  </div>
+  
+  <div class="chat-messages" id="chatMessages">
+    <div class="welcome-message">
+      <strong>Welcome to AI Audit Assistant!</strong>
+      Ask me anything about your audit documents, findings, compliance scores, or risk assessments.
+    </div>
+  </div>
+  
+  <div class="message assistant" style="display: none;">
+    <div class="message-avatar">AI</div>
+    <div class="typing-indicator" id="typingIndicator">
+      <div class="typing-dot"></div>
+      <div class="typing-dot"></div>
+      <div class="typing-dot"></div>
+    </div>
+  </div>
+  
+  <div class="chat-input-area">
+    <input 
+      type="text" 
+      class="chat-input" 
+      id="chatInput" 
+      placeholder="Ask a question..."
+      onkeypress="handleChatKeyPress(event)"
+    />
+    <button class="chat-send-btn" id="chatSendBtn" onclick="sendChatMessage()">Send</button>
+  </div>
+</div>
+
+  <script>
+    const API_BASE_URL = 'http://localhost:8000';
+    // ============================================
+// 1. FETCH DASHBOARD METRICS
+// ============================================
+async function fetchDashboardMetrics() {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/audit/metrics`);
+    if (!response.ok) throw new Error('Failed to fetch metrics');
+    
+    const data = await response.json();
+    console.log('Dashboard data:', data);
+    
+    // Update KPIs
+    updateKPICards(data.metrics);
+    
+    // Update Risk Heatmap
+    updateRiskHeatmap(data.risk_heatmap);
+    
+    // Update Findings Table (if you have one - will add later)
+    // updateFindingsTable(data.findings);
+    
+    return data;
+  } catch (error) {
+    console.error('Error fetching dashboard metrics:', error);
+    showError('Failed to load dashboard data');
+  }
+}
+
+// ============================================
+// 2. UPDATE KPI CARDS
+// ============================================
+function updateKPICards(metrics) {
+  if (!metrics) return;
+  
+  // Compliance Score
+  const complianceScore = metrics.compliance_score || 0;
+  const complianceEl = document.querySelector('.ring-conic');
+  const complianceTextEl = complianceEl.querySelector('.text-xl');
+  if (complianceEl) {
+    complianceEl.style.setProperty('--pct', complianceScore);
+    complianceTextEl.textContent = `${Math.round(complianceScore)}%`;
+  }
+  
+  // High-Risk Transactions
+  const highRiskEl = document.querySelectorAll('.text-3xl')[0];
+  if (highRiskEl) {
+    highRiskEl.textContent = metrics.high_risk_transactions || 0;
+  }
+  
+  // Open Findings
+  const openFindingsEl = document.querySelectorAll('.text-3xl')[1];
+  if (openFindingsEl) {
+    openFindingsEl.textContent = metrics.open_findings_total || 0;
+  }
+  
+  // Update findings badges
+  const criticalBadge = document.querySelector('.bg-red-50');
+  const highBadge = document.querySelector('.bg-yellow-50');
+  const mediumBadge = document.querySelector('.bg-blue-50');
+  
+  if (criticalBadge) criticalBadge.textContent = `Critical ${metrics.critical_findings || 0}`;
+  if (highBadge) highBadge.textContent = `High ${metrics.high_findings || 0}`;
+  if (mediumBadge) mediumBadge.textContent = `Medium ${metrics.medium_findings || 0}`;
+  
+  // ESG Risk Score
+  const esgScore = metrics.esg_risk_score || 0;
+  const esgBarEl = document.querySelector('.bg-gradient-to-r');
+  const esgScoreEl = esgBarEl.closest('.mt-3').querySelector('.text-sm span');
+  
+  if (esgBarEl) {
+    esgBarEl.style.width = `${esgScore * 100}%`;
+  }
+  if (esgScoreEl) {
+    esgScoreEl.textContent = `Score ${esgScore.toFixed(2)}`;
+  }
+}
+
+// ============================================
+// 3. UPDATE RISK HEATMAP
+// ============================================
+function updateRiskHeatmap(heatmapData) {
+  if (!heatmapData || heatmapData.length === 0) {
+    document.getElementById('heatInfo').textContent = 'No heatmap data available';
+    return;
+  }
+  
+  // Process names and risk levels
+  const processes = ['Procure-to-Pay', 'Order-to-Cash', 'Record-to-Report', 'IT Change', 'Asset Mgmt'];
+  const riskLevels = ['Very Low', 'Low', 'Moderate', 'Elevated', 'High', 'Severe'];
+  
+  // Create a map for quick lookup
+  const heatmapMap = {};
+  heatmapData.forEach(item => {
+    const key = `${item.process_name}_${item.risk_level}`;
+    heatmapMap[key] = item.count;
+  });
+  
+  // Build rows
+  const heatRowsContainer = document.getElementById('heatRows');
+  heatRowsContainer.innerHTML = '';
+  
+  processes.forEach(process => {
+    const row = document.createElement('div');
+    row.className = 'grid grid-cols-7 gap-2 items-center';
+    
+    // Process name cell
+    const nameCell = document.createElement('div');
+    nameCell.className = 'text-xs text-steel-600 dark:text-steel-300 font-medium';
+    nameCell.textContent = process;
+    row.appendChild(nameCell);
+    
+    // Risk level cells
+    riskLevels.forEach(level => {
+      const key = `${process}_${level}`;
+      const count = heatmapMap[key] || 0;
+      
+      const cell = document.createElement('div');
+      cell.className = 'h-12 rounded flex items-center justify-center text-xs font-semibold cursor-pointer transition-all hover:scale-105';
+      cell.textContent = count;
+      
+      // Color based on count (0-100 scale)
+      const color = getHeatmapColor(count);
+      cell.style.backgroundColor = color.bg;
+      cell.style.color = color.text;
+      cell.style.border = `1px solid ${color.border}`;
+      
+      // Tooltip
+      cell.title = `${process} - ${level}: ${count} issues`;
+      
+      row.appendChild(cell);
+    });
+    
+    heatRowsContainer.appendChild(row);
+  });
+  
+  // Update info
+  const totalIssues = heatmapData.reduce((sum, item) => sum + item.count, 0);
+  document.getElementById('heatInfo').textContent = `Total risk items across all processes: ${totalIssues}`;
+}
+
+// Helper function to get heatmap colors
+function getHeatmapColor(count) {
+  if (count === 0) return { bg: '#f1f5f9', text: '#64748b', border: '#e2e8f0' }; // gray
+  if (count < 20) return { bg: '#d1fae5', text: '#065f46', border: '#a7f3d0' }; // green
+  if (count < 40) return { bg: '#fef3c7', text: '#92400e', border: '#fde68a' }; // yellow
+  if (count < 60) return { bg: '#fed7aa', text: '#9a3412', border: '#fdba74' }; // orange
+  if (count < 80) return { bg: '#fecaca', text: '#991b1b', border: '#fca5a5' }; // red
+  return { bg: '#dc2626', text: '#ffffff', border: '#b91c1c' }; // dark red
+}
+
+// ============================================
+// 4. RUN INSTANT AUDIT
+// ============================================
+async function runInstantAudit() {
+  const btnAudit = document.getElementById('btnAudit');
+  const originalText = btnAudit.textContent;
+  
+  try {
+    // Show loading state
+    btnAudit.disabled = true;
+    btnAudit.textContent = 'Running Audit...';
+    btnAudit.classList.add('opacity-50', 'cursor-not-allowed');
+    
+    const response = await fetch(`${API_BASE_URL}/api/audit/run-instant`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    if (!response.ok) throw new Error('Failed to run audit');
+    
+    const result = await response.json();
+    console.log('Audit result:', result);
+    
+    // Show success message
+    showSuccess('Audit completed successfully! Refreshing dashboard...');
+    
+    // Refresh dashboard data
+    setTimeout(() => {
+      fetchDashboardMetrics();
+    }, 1000);
+    
+  } catch (error) {
+    console.error('Error running audit:', error);
+    showError('Failed to run audit. Please try again.');
+  } finally {
+    // Reset button
+    btnAudit.disabled = false;
+    btnAudit.textContent = originalText;
+    btnAudit.classList.remove('opacity-50', 'cursor-not-allowed');
+  }
+}
+
+// ============================================
+// 5. GENERATE REPORT
+// ============================================
+// ============================================
+// GENERATE REPORT - WORKING VERSION
+// ============================================
+async function generateReport() {
+  console.log('Generate Report clicked');
+  
+  const btnReport = document.getElementById('btnReport');
+  
+  if (!btnReport) {
+    console.error('ERROR: btnReport element not found in DOM');
+    alert('Error: Generate Report button not found');
+    return;
+  }
+  
+  const originalText = btnReport.textContent;
+  
+  try {
+    // Show loading state
+    btnReport.disabled = true;
+    btnReport.textContent = 'Generating Report...';
+    btnReport.classList.add('opacity-50', 'cursor-not-allowed');
+    
+    console.log('Calling API:', `${API_BASE_URL}/api/audit/report/generate`);
+    
+    const response = await fetch(`${API_BASE_URL}/api/audit/report/generate`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    console.log('Response status:', response.status);
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.detail || 'Failed to generate report');
+    }
+    
+    const result = await response.json();
+    console.log('Report data received:', result);
+    
+    if (result.error) {
+      showError(result.error);
+      return;
+    }
+    
+    // Show success
+    showSuccess('Report generated successfully!');
+    
+    // Display report in modal
+    displayReportModal(result);
+    
+  } catch (error) {
+    console.error('Error generating report:', error);
+    showError('Failed to generate report: ' + error.message);
+  } finally {
+    // Reset button
+    btnReport.disabled = false;
+    btnReport.textContent = originalText;
+    btnReport.classList.remove('opacity-50', 'cursor-not-allowed');
+  }
+}
+
+// Display report in a modal
+function displayReportModal(reportData) {
+  // Remove any existing modal first
+  const existingModal = document.getElementById('reportModal');
+  if (existingModal) {
+    existingModal.remove();
+  }
+  
+  // Create modal container
+  const modalContainer = document.createElement('div');
+  modalContainer.id = 'reportModal';
+  modalContainer.className = 'fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4';
+  modalContainer.style.zIndex = '9999';
+  
+  // Create modal content
+  const modalContent = `
+    <div class="bg-white dark:bg-steel-800 rounded-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto p-6 shadow-2xl">
+      <div class="flex items-center justify-between mb-4 border-b border-steel-200 dark:border-steel-700 pb-4">
+        <h2 class="text-2xl font-bold text-steel-900 dark:text-white">Executive Summary Report</h2>
+        <button onclick="closeReportModal()" class="text-steel-500 hover:text-steel-700 dark:hover:text-steel-300 transition-colors">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+          </svg>
+        </button>
+      </div>
+      
+      <div class="prose dark:prose-invert max-w-none mb-6">
+        <div class="bg-steel-50 dark:bg-steel-900/50 p-4 rounded-lg">
+          <p class="text-sm text-steel-600 dark:text-steel-400 mb-2">
+            <strong>Report ID:</strong> ${reportData.report_id || 'N/A'}
+          </p>
+          <p class="text-sm text-steel-600 dark:text-steel-400">
+            <strong>Generated:</strong> ${new Date(reportData.generated_date || Date.now()).toLocaleString()}
+          </p>
+        </div>
+        
+        <div class="mt-4 whitespace-pre-wrap text-sm leading-relaxed text-steel-700 dark:text-steel-300">
+${reportData.summary || 'No summary available'}
+        </div>
+      </div>
+      
+      <div class="flex gap-3 border-t border-steel-200 dark:border-steel-700 pt-4">
+        <button onclick="downloadReportFile()" class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors">
+          Download Report
+        </button>
+        <button onclick="copyReportToClipboard()" class="px-4 py-2 border border-steel-300 dark:border-steel-600 rounded-lg hover:bg-steel-50 dark:hover:bg-steel-700 transition-colors">
+          Copy to Clipboard
+        </button>
+        <button onclick="closeReportModal()" class="px-4 py-2 border border-steel-300 dark:border-steel-600 rounded-lg hover:bg-steel-50 dark:hover:bg-steel-700 transition-colors">
+          Close
+        </button>
+      </div>
+    </div>
+  `;
+  
+  modalContainer.innerHTML = modalContent;
+  document.body.appendChild(modalContainer);
+  
+  // Store report data globally for download/copy functions
+  window.currentReport = reportData;
+  
+  // Close modal on background click
+  modalContainer.addEventListener('click', function(e) {
+    if (e.target === modalContainer) {
+      closeReportModal();
+    }
+  });
+}
+
+function openAIChat() {
+  const widget = document.getElementById('aiChatWidget');
+  widget.classList.add('active');
+  document.getElementById('chatInput').focus();
+}
+
+// Close AI Chat Widget
+function closeAIChat() {
+  const widget = document.getElementById('aiChatWidget');
+  widget.classList.remove('active');
+}
+
+// Handle Enter key press in chat input
+function handleChatKeyPress(event) {
+  if (event.key === 'Enter') {
+    sendChatMessage();
+  }
+}
+
+// Send chat message to AI
+async function sendChatMessage() {
+  const input = document.getElementById('chatInput');
+  const sendBtn = document.getElementById('chatSendBtn');
+  const question = input.value.trim();
+  
+  if (!question) return;
+  
+  // Add user message to chat
+  addMessageToChat('user', question);
+  
+  // Clear input
+  input.value = '';
+  
+  // Disable input while processing
+  input.disabled = true;
+  sendBtn.disabled = true;
+  
+  // Show typing indicator
+  showTypingIndicator();
+  
+  try {
+    // Call backend API
+    const response = await fetch(`${API_BASE_URL}/api/assistant/query`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ question: question })
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to get response from AI');
+    }
+    
+    const data = await response.json();
+    console.log('AI Response:', data);
+    
+    // Hide typing indicator
+    hideTypingIndicator();
+    
+    // Add AI response to chat
+    addMessageToChat('assistant', data.answer || 'Sorry, I could not generate a response.');
+    
+  } catch (error) {
+    console.error('Error sending message:', error);
+    hideTypingIndicator();
+    addMessageToChat('assistant', 'Sorry, I encountered an error. Please try again.');
+  } finally {
+    // Re-enable input
+    input.disabled = false;
+    sendBtn.disabled = false;
+    input.focus();
+  }
+}
+
+// Add message to chat
+function addMessageToChat(role, content) {
+  const messagesContainer = document.getElementById('chatMessages');
+  
+  const messageDiv = document.createElement('div');
+  messageDiv.className = `message ${role}`;
+  
+  const avatar = document.createElement('div');
+  avatar.className = 'message-avatar';
+  avatar.textContent = role === 'user' ? 'You' : 'AI';
+  
+  const messageContent = document.createElement('div');
+  messageContent.className = 'message-content';
+  messageContent.textContent = content;
+  
+  messageDiv.appendChild(avatar);
+  messageDiv.appendChild(messageContent);
+  
+  messagesContainer.appendChild(messageDiv);
+  
+  // Scroll to bottom
+  messagesContainer.scrollTop = messagesContainer.scrollHeight;
+}
+
+// Show typing indicator
+function showTypingIndicator() {
+  const indicator = document.getElementById('typingIndicator');
+  indicator.classList.add('active');
+  
+  // Scroll to bottom
+  const messagesContainer = document.getElementById('chatMessages');
+  messagesContainer.scrollTop = messagesContainer.scrollHeight;
+}
+
+// Hide typing indicator
+function hideTypingIndicator() {
+  const indicator = document.getElementById('typingIndicator');
+  indicator.classList.remove('active');
+}
+
+// Connect "Ask Audit Assistant" button
+document.addEventListener('DOMContentLoaded', function() {
+  const assistantBtn = document.getElementById('btnAssistant');
+  if (assistantBtn) {
+    assistantBtn.addEventListener('click', openAIChat);
+  }
+});
+
+// Close report modal
+function closeReportModal() {
+  const modal = document.getElementById('reportModal');
+  if (modal) {
+    modal.remove();
+  }
+  window.currentReport = null;
+}
+
+// Download report as text file
+function downloadReportFile() {
+  if (!window.currentReport) {
+    showError('No report available to download');
+    return;
+  }
+  
+  const reportText = `
+AUTONOMIQ AUDIT EXECUTIVE SUMMARY REPORT
+=========================================
+
+Report ID: ${window.currentReport.report_id || 'N/A'}
+Generated: ${new Date(window.currentReport.generated_date || Date.now()).toLocaleString()}
+
+${window.currentReport.summary || 'No summary available'}
+
+=========================================
+Generated by AutonomIQ Audit AI System
+`;
+  
+  const blob = new Blob([reportText], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `audit-report-${new Date().toISOString().split('T')[0]}.txt`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  
+  showSuccess('Report downloaded successfully!');
+}
+
+// Copy report to clipboard
+function copyReportToClipboard() {
+  if (!window.currentReport) {
+    showError('No report available to copy');
+    return;
+  }
+  
+  const reportText = window.currentReport.summary || 'No summary available';
+  
+  navigator.clipboard.writeText(reportText).then(() => {
+    showSuccess('Report copied to clipboard!');
+  }).catch(err => {
+    console.error('Failed to copy:', err);
+    showError('Failed to copy report to clipboard');
+  });
+}
+
+
+// ============================================
+// 6. UTILITY FUNCTIONS
+// ============================================
+function showSuccess(message) {
+  showNotification(message, 'success');
+}
+
+function showError(message) {
+  showNotification(message, 'error');
+}
+
+function showNotification(message, type = 'info') {
+  const bgColor = type === 'success' ? 'bg-green-500' : type === 'error' ? 'bg-red-500' : 'bg-blue-500';
+  
+  const notification = document.createElement('div');
+  notification.className = `fixed top-4 right-4 ${bgColor} text-white px-6 py-3 rounded-lg shadow-lg z-50 animate-slide-in`;
+  notification.textContent = message;
+  
+  document.body.appendChild(notification);
+  
+  setTimeout(() => {
+    notification.classList.add('animate-slide-out');
+    setTimeout(() => notification.remove(), 300);
+  }, 3000);
+}
+
+// ============================================
+// 7. EVENT LISTENERS & INITIALIZATION
+// ============================================
+document.addEventListener('DOMContentLoaded', function() {
+  // Fetch dashboard data on page load
+  fetchDashboardMetrics();
+  
+  // Button click handlers
+  document.getElementById('btnAudit').addEventListener('click', runInstantAudit);
+  document.getElementById('btnReport').addEventListener('click', generateReport);
+  
+  // Auto-refresh every 5 minutes
+  setInterval(fetchDashboardMetrics, 5 * 60 * 1000);
+  
+  console.log('Dashboard initialized and connected to backend!');
+});
+    // State
+    const pages = [
+      { id: 'dashboard', name: 'Dashboard', icon: iconGrid() },
+      { id: 'agents', name: 'Agent Hub', icon: iconBots() },
+      { id: 'explore', name: 'Audit Exploration', icon: iconSearch() },
+      { id: 'risk', name: 'Risk & Compliance', icon: iconShield() },
+      { id: 'reports', name: 'Reports & Evidence', icon: iconDoc() },
+      { id: 'alerts', name: 'Alerts', icon: iconBell() },
+      { id: 'vendors', name: 'Vendor Management', icon: iconUsers() },
+    ];
+    let currentPage = 'dashboard';
+    let dark = false;
+    let anomalySort = { key: '', asc: true };
+    const navClasses = "w-full text-left flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-primary-50 dark:hover:bg-steel-700";
+    const navActive = "bg-primary-600 text-white hover:bg-primary-700";
+    const navInactive = "text-steel-800 dark:text-steel-100";
+    // Utils
+    const $ = (sel, ctx=document)=>ctx.querySelector(sel);
+    // Init
+    document.addEventListener('DOMContentLoaded', () => {
+      initTheme();
+      buildNav();
+      renderDashboard();
+      renderAgents();
+      renderExplore();
+      renderRisk();
+      renderReports();
+      renderAlerts();
+      renderVendors();
+     
+      wireBasics();
+      // open dashboard by default
+      navigate('dashboard');
+    });
+
+    function wireBasics() {
+      document.getElementById('btnAudit').addEventListener('click', runAuditFlow);
+      document.getElementById('btnReport').addEventListener('click', openReportWizard);
+      document.getElementById('btnAssistant').addEventListener('click', () => toggleChat(true));
+      document.getElementById('themeToggle').addEventListener('click', toggleTheme);
+      document.getElementById('bellBtn').addEventListener('click', toggleNotif);
+      document.getElementById('chatToggle').addEventListener('click', () => toggleChat(true));
+      document.getElementById('toggleAsIs').addEventListener('change', toggleProcessLayers);
+      document.getElementById('toggleAsDesigned').addEventListener('change', toggleProcessLayers);
+      document.getElementById('mobileMenuBtn').addEventListener('click', () => toggleMobile(true));
+      document.getElementById('evidenceInput').addEventListener('change', handleEvidence);
+    }
+
+    // THEME
+    function initTheme() {
+      const saved = localStorage.getItem('theme');
+      dark = saved ? (saved === 'dark') : window.matchMedia('(prefers-color-scheme: dark)').matches;
+      document.documentElement.classList.toggle('dark', dark);
+      document.getElementById('sunIcon').classList.toggle('hidden', !dark);
+      document.getElementById('moonIcon').classList.toggle('hidden', dark);
+    }
+    function toggleTheme() {
+      dark = !dark;
+      document.documentElement.classList.toggle('dark', dark);
+      localStorage.setItem('theme', dark ? 'dark' : 'light');
+      document.getElementById('sunIcon').classList.toggle('hidden', !dark);
+      document.getElementById('moonIcon').classList.toggle('hidden', dark);
+    }
+
+    // NAV
+    function buildNav() {
+      const list = document.getElementById('navList');
+      const listM = document.getElementById('navListMobile');
+      pages.forEach(p => {
+        const li = document.createElement('li');
+        li.innerHTML = `<button class="${navClasses} ${p.id===currentPage?navActive:navInactive}" onclick="navigate('${p.id}')">
+          <span class="inline-flex items-center justify-center size-7 rounded-md border border-transparent ${p.id===currentPage?'bg-white/20 text-white':'bg-white dark:bg-steel-800 text-primary-600 dark:text-primary-300 border-steel-200 dark:border-steel-700'}">${p.icon}</span>
+          <span>${p.name}</span>
+        </button>`;
+        list.appendChild(li);
+
+        const lim = document.createElement('li');
+        lim.innerHTML = `<button class="${navClasses} ${p.id===currentPage?navActive:navInactive}" onclick="navigate('${p.id}'); toggleMobile(false);">
+          <span class="inline-flex items-center justify-center size-7 rounded-md border border-transparent ${p.id===currentPage?'bg-white/20 text-white':'bg-white dark:bg-steel-800 text-primary-600 dark:text-primary-300 border-steel-200 dark:border-steel-700'}">${p.icon}</span>
+          <span>${p.name}</span>
+        </button>`;
+        listM.appendChild(lim);
+      });
+    }
+    function navigate(id) {
+      currentPage = id;
+      pages.forEach(p => {
+        document.getElementById('page-' + p.id).classList.toggle('hidden', p.id !== id);
+      });
+      // Update title/icon
+      const page = pages.find(x => x.id===id);
+      document.getElementById('pageTitle').textContent = page.name;
+      document.getElementById('pageIcon').innerHTML = page.icon;
+      // Update active nav
+      [...document.querySelectorAll('#navList button')].forEach((btn,i)=>{
+        const pid = pages[i].id;
+        btn.className = `${navClasses} ${pid===currentPage?navActive:navInactive}`;
+        btn.querySelector('span').className = `inline-flex items-center justify-center size-7 rounded-md border border-transparent ${pid===currentPage?'bg-white/20 text-white':'bg-white dark:bg-steel-800 text-primary-600 dark:text-primary-300 border-steel-200 dark:border-steel-700'}`;
+      });
+      [...document.querySelectorAll('#navListMobile button')].forEach((btn,i)=>{
+        const pid = pages[i].id;
+        btn.className = `${navClasses} ${pid===currentPage?navActive:navInactive}`;
+        btn.querySelector('span').className = `inline-flex items-center justify-center size-7 rounded-md border border-transparent ${pid===currentPage?'bg-white/20 text-white':'bg-white dark:bg-steel-800 text-primary-600 dark:text-primary-300 border-steel-200 dark:border-steel-700'}`;
+      });
+    }
+    function toggleMobile(open) {
+      document.getElementById('mobileDrawer').classList.toggle('hidden', !open);
+    }
+
+    // NOTIFS
+    const notifData = [
+      { id:1, sev:'High', agent:'IT', msg:'Admin access granted without approval (Change-1234)', time:'2m', ch:['Teams','Slack'] },
+      { id:2, sev:'Medium', agent:'Finance', msg:'Round-dollar invoice detected > $50k', time:'15m', ch:['Slack'] },
+      { id:3, sev:'Low', agent:'Compliance', msg:'GDPR DPIA reminder due in 3 days', time:'1h', ch:['Email'] },
+      { id:4, sev:'High', agent:'IoT', msg:'Plant sensor outlier in torque variance', time:'3h', ch:['Teams'] },
+    ];
+    function toggleNotif() {
+      const el = document.getElementById('notifMenu');
+      el.classList.toggle('hidden');
+      renderNotif();
+      if (!el.classList.contains('hidden')) document.getElementById('notifDot').style.display='none';
+    }
+    function renderNotif() {
+      const wrap = document.getElementById('notifList');
+      wrap.innerHTML = '';
+      notifData.forEach(n=>{
+        const sevColor = n.sev==='High'?'bg-red-100 text-red-700': n.sev==='Medium'?'bg-yellow-100 text-yellow-700':'bg-green-100 text-green-700';
+        const item = document.createElement('div');
+        item.className = 'p-3 hover:bg-steel-50 dark:hover:bg-steel-700/40';
+        item.innerHTML = `
+          <div class="flex items-center justify-between">
+            <div class="text-sm">${n.msg}</div>
+            <span class="text-[11px] text-steel-500">${n.time}</span>
+          </div>
+          <div class="mt-1 flex items-center gap-2">
+            <span class="text-[11px] px-1.5 py-0.5 rounded ${sevColor}">${n.sev}</span>
+            <span class="text-[11px] px-1.5 py-0.5 rounded bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300">${n.agent}</span>
+            <div class="ml-auto flex items-center gap-1">${n.ch.map(c=>`<span class="text-[10px] px-1.5 py-0.5 rounded bg-steel-100 text-steel-700 dark:bg-steel-700 dark:text-steel-200">${c}</span>`).join('')}</div>
+          </div>
+        `;
+        wrap.appendChild(item);
+      });
+    }
+
+    // DASHBOARD
+    function renderDashboard() {
+      // Heatmap headers already present; add rows
+      const processes = ['Procure-to-Pay','Order-to-Cash','Record-to-Report','IT Change','Asset Mgmt'];
+      const levels = ['Very Low','Low','Moderate','Elevated','High','Severe'];
+      const heatRows = document.getElementById('heatRows');
+      heatRows.innerHTML = '';
+      processes.forEach((p,ri)=>{
+        const row = document.createElement('div');
+        row.className = 'grid grid-cols-7 gap-2 items-center';
+        row.innerHTML = `<div class="text-xs text-steel-600 dark:text-steel-300">${p}</div>`;
+        levels.forEach((l,ci)=>{
+          const riskScore = Math.round((Math.sin((ri+1)*(ci+1))+1)*50); // 0..100 demo
+          const color = riskScore>75?'bg-critical/80': riskScore>55?'bg-warning/80': riskScore>35?'bg-yellow-400/60':'bg-emerald-400/70';
+          const cell = document.createElement('button');
+          cell.className = `heat-cell transition shadow-soft text-xs text-white px-2 py-6 rounded-lg ${color}`;
+          cell.textContent = riskScore;
+          cell.title = `${p} — ${l}`;
+          cell.onclick = () => {
+            document.getElementById('heatInfo').textContent = `${p} at ${l}: risk score ${riskScore}. Click "Audit Exploration" for drill-down.`;
+          };
+          row.appendChild(cell);
+        });
+        heatRows.appendChild(row);
+      });
+
+      // Timeline
+      const timeline = document.getElementById('timeline');
+      timeline.innerHTML = '';
+      const days = 14;
+      for (let i=0;i<days;i++) {
+        const val = Math.floor(Math.random()*10);
+        const sev = val>7?'critical': val>4?'warning':'compliant';
+        const bar = document.createElement('div');
+        bar.className = `w-6 rounded-t-md ${sev==='critical'?'bg-critical':sev==='warning'?'bg-warning':'bg-emerald-400'}`;
+        bar.style.height = `${10 + val*8}px`;
+        bar.title = `${days-i}d ago: ${val} anomalies`;
+        bar.onclick = ()=> document.getElementById('timelineInfo').textContent = `${val} anomalies detected ${days - i} days ago`;
+        timeline.appendChild(bar);
+      }
+    }
+
+    // AGENTS
+    const agentDefs = [
+      { name:'Finance Auditor', status:'Active', conf:0.93, findings:['$50k duplicate invoice','Missing 3-way match','Round-dollar approvals'], tag:'Finance' },
+      { name:'Process Miner', status:'Scanning', conf:0.88, findings:['Skipped approval path','Rework loop O2C','Bottleneck in GRN'], tag:'Process' },
+      { name:'IT Auditor', status:'Active', conf:0.91, findings:['PRD change without CAB','SoD violation','Excessive admin rights'], tag:'IT' },
+      { name:'Compliance Checker', status:'Idle', conf:0.87, findings:['GDPR DPIA overdue','ISO27001 A.9 gap','ESG supplier doc'], tag:'Compliance' },
+      { name:'IoT Auditor', status:'Active', conf:0.82, findings:['Torque variance outlier','Line 3 sensor drift'], tag:'IoT' },
+    ];
+    function renderAgents() {
+      const grid = document.getElementById('agentGrid');
+      grid.innerHTML = '';
+      agentDefs.forEach((a,i)=>{
+        const card = document.createElement('div');
+        card.className = 'card-hover p-5 rounded-xl2 bg-white/90 dark:bg-steel-800/70 border border-steel-100 dark:border-steel-700 shadow-soft flex flex-col';
+        const statusDot = a.status==='Active'?'bg-emerald-500': a.status==='Scanning'?'bg-warning':'bg-steel-400';
+        card.innerHTML = `
+          <div class="flex items-start justify-between">
+            <div>
+              <div class="font-semibold">${a.name}</div>
+              <div class="mt-1 text-xs text-steel-500 flex items-center gap-2">
+                <span class="size-2.5 rounded-full ${statusDot}"></span>${a.status}
+              </div>
+            </div>
+            <div class="relative size-14 rounded-full ring-conic" style="--ring-color:#2157d5; --pct:${a.conf*100}">
+              <div class="absolute inset-1 rounded-full bg-white dark:bg-steel-900 flex items-center justify-center text-sm font-semibold">${Math.round(a.conf*100)}%</div>
+            </div>
+          </div>
+          <ul class="mt-4 text-sm space-y-1">${a.findings.slice(0,3).map(f=>`<li class="flex items-center gap-2"><span class="size-1.5 rounded-full bg-primary-600"></span>${f}</li>`).join('')}</ul>
+          <div class="mt-4 flex items-center gap-2">
+            <button class="px-3 py-2 rounded-lg bg-primary-600 text-white text-sm" onclick="openAgentExplain(${i})">Explain</button>
+            <button class="px-3 py-2 rounded-lg border border-steel-200 dark:border-steel-700 text-sm" onclick="pushCollab('${a.name}','Shared insights to ${a.tag}')">Share</button>
+          </div>
+        `;
+        grid.appendChild(card);
+      });
+
+      // Collaboration feed
+      const seed = [
+        { agent:'Finance Auditor', text:'Flagged 3 duplicate vendors with overlapping IBANs', time:'2m' },
+        { agent:'Process Miner', text:'Detected skipped approvals in P2P for 12 cases', time:'14m' },
+        { agent:'IT Auditor', text:'Found SoD conflict between AP and Vendor Master roles', time:'28m' },
+      ];
+      const feed = document.getElementById('collabFeed');
+      feed.innerHTML = '';
+      seed.forEach(s=> appendFeed(s.agent, s.text, s.time));
+    }
+    function pushCollab(agent, text) {
+      appendFeed(agent, text, 'now');
+    }
+    function appendFeed(agent, text, time) {
+      const feed = document.getElementById('collabFeed');
+      const item = document.createElement('div');
+      item.className = 'p-3 rounded-lg border border-steel-100 dark:border-steel-700 bg-white/60 dark:bg-steel-900/30';
+      item.innerHTML = `
+        <div class="text-sm"><span class="font-semibold">${agent}</span> — ${text}</div>
+        <div class="text-xs text-steel-500 mt-1">${time}</div>
+      `;
+      feed.prepend(item);
+    }
+    function openAgentExplain(i) {
+      const a = agentDefs[i];
+      openModal('Agent Explainability', `
+        <div class="space-y-4">
+          <div class="flex items-center gap-3">
+            <div class="font-semibold">${a.name}</div>
+            <div class="text-xs px-2 py-1 rounded-full bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300 border border-primary-100 dark:border-primary-800">Confidence ${Math.round(a.conf*100)}%</div>
+          </div>
+          <div class="text-sm text-steel-700 dark:text-steel-200">Reasoning</div>
+          <div class="p-3 rounded-lg bg-steel-50 dark:bg-steel-900/40 border border-steel-100 dark:border-steel-700 text-sm">
+            Based on pattern deviations across 90 days, with emphasis on seasonality-adjusted thresholds and peer benchmarking.
+          </div>
+          <div class="text-sm text-steel-700 dark:text-steel-200">Linked Evidence</div>
+          <ul class="text-sm list-disc pl-5 space-y-1">
+            <li>Audit Log Exports (ITSM Change-1234)</li>
+            <li>ERP Invoice Sample (INV-50811)</li>
+            <li>Supplier Onboarding Checklist (DPIA-42)</li>
+          </ul>
+        </div>
+      `, `<button class="px-4 py-2.5 rounded-lg bg-primary-600 text-white" onclick="closeModal()">Close</button>`);
+    }
+
+    // EXPLORE
+    const anomalies = [
+      { id:'TX-1001', amount: 51234, process:'Procure-to-Pay', risk:'High', agent:'Finance Auditor', status:'Open', evidence:['INV-501','PO-184'] },
+      { id:'TX-1002', amount: 980, process:'Order-to-Cash', risk:'Low', agent:'Process Miner', status:'In Progress', evidence:['ORD-11'] },
+      { id:'TX-1003', amount: 75220, process:'Record-to-Report', risk:'Critical', agent:'Finance Auditor', status:'Open', evidence:['JE-77','ACC-42'] },
+      { id:'TX-1004', amount: 14050, process:'IT Change', risk:'Medium', agent:'IT Auditor', status:'Open', evidence:['CHG-2103'] },
+      { id:'TX-1005', amount: 2305, process:'Procure-to-Pay', risk:'Medium', agent:'Compliance Checker', status:'Closed', evidence:['DPIA-12'] },
+      { id:'TX-1006', amount: 50500, process:'Order-to-Cash', risk:'High', agent:'Process Miner', status:'In Progress', evidence:['OC-89'] },
+    ];
+    function renderExplore() {
+      renderAnomalyTable(anomalies);
+      buildCaseTimeline();
+    }
+    function riskPill(r) {
+      const map = { Low:'bg-emerald-50 text-emerald-700 border-emerald-200', Medium:'bg-yellow-50 text-yellow-700 border-yellow-200', High:'bg-orange-50 text-orange-700 border-orange-200', Critical:'bg-red-50 text-red-700 border-red-200' };
+      return `<span class="text-xs px-2 py-1 rounded-full border ${map[r]}">${r}</span>`;
+    }
+    function renderAnomalyTable(rows) {
+      const body = document.getElementById('anomalyTbody');
+      body.innerHTML = '';
+      rows.forEach((r, idx)=>{
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-steel-50 dark:hover:bg-steel-700/40';
+        tr.innerHTML = `
+          <td class="py-2 px-2">${r.id}</td>
+          <td class="py-2 px-2">$${r.amount.toLocaleString()}</td>
+          <td class="py-2 px-2">${r.process}</td>
+          <td class="py-2 px-2">${riskPill(r.risk)}</td>
+          <td class="py-2 px-2">${r.agent}</td>
+          <td class="py-2 px-2">${r.status}</td>
+        `;
+        tr.onclick = ()=> openExplainRow(r);
+        body.appendChild(tr);
+      });
+    }
+    function openExplainRow(r) {
+      openModal(`Explain ${r.id}`, `
+        <div class="space-y-3">
+          <div class="text-sm">Amount <span class="font-semibold">$${r.amount.toLocaleString()}</span>, ${r.process} — ${riskPill(r.risk)}</div>
+          <div class="text-sm">Reasoning</div>
+          <div class="p-3 rounded-lg bg-steel-50 dark:bg-steel-900/40 border border-steel-100 dark:border-steel-700 text-sm">
+            Detected outlier vs peer transactions (z-score &gt; 3), vendor master matched with duplicated IBAN pattern, approval step possibly skipped.
+          </div>
+          <div class="text-sm">Evidence</div>
+          <div class="flex flex-wrap gap-2">${r.evidence.map(e=>`<span class="text-xs px-2 py-1 rounded-full bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300 border border-primary-100 dark:border-primary-800">${e}</span>`).join('')}</div>
+        </div>
+      `, `<button class="px-4 py-2.5 rounded-lg bg-primary-600 text-white" onclick="closeModal()">Close</button>`);
+    }
+    function sortTable(key) {
+      anomalySort.asc = anomalySort.key===key ? !anomalySort.asc : true;
+      anomalySort.key = key;
+      const rows = [...anomalies];
+      if (key==='amount') rows.sort((a,b)=> anomalySort.asc? a.amount-b.amount : b.amount-a.amount);
+      if (key==='risk') {
+        const order = { Low:1, Medium:2, High:3, Critical:4 };
+        rows.sort((a,b)=> anomalySort.asc? order[a.risk]-order[b.risk] : order[b.risk]-order[a.risk]);
+      }
+      renderAnomalyTable(rows);
+    }
+    function applyExploreFilters() {
+      const q = document.getElementById('exploreSearch').value.toLowerCase();
+      const r = document.getElementById('filterRisk').value;
+      const p = document.getElementById('filterProcess').value;
+      const filtered = anomalies.filter(x =>
+        (!q || JSON.stringify(x).toLowerCase().includes(q)) &&
+        (!r || x.risk===r) &&
+        (!p || x.process===p)
+      );
+      renderAnomalyTable(filtered);
+    }
+    function buildCaseTimeline() {
+      const events = [
+        { when:'T-5d', name:'Order Created', ev:['ORD-11'] },
+        { when:'T-4d', name:'Approval', ev:['APR-09'] },
+        { when:'T-2d', name:'Invoice Received', ev:['INV-501'] },
+        { when:'T-1d', name:'3-way Match', ev:['PO-184','GRN-07'] },
+        { when:'T', name:'Payment', ev:['PAY-508'] },
+      ];
+      const wrap = document.getElementById('caseTimeline');
+      wrap.innerHTML = '';
+      events.forEach((e,i)=>{
+        const block = document.createElement('div');
+        block.className = 'flex items-center gap-3';
+        block.innerHTML = `
+          <div class="text-xs text-steel-500 w-10">${e.when}</div>
+          <div class="flex items-center gap-3">
+            <div class="size-3 rounded-full ${i<events.length-1?'bg-emerald-400':'bg-warning'}"></div>
+            <button class="px-3 py-1.5 rounded-lg border border-steel-200 dark:border-steel-700 hover:bg-steel-50 dark:hover:bg-steel-700/40 text-sm">${e.name}</button>
+          </div>
+        `;
+        block.querySelector('button').onclick = ()=> openModal(e.name, `
+          <div class="text-sm mb-2">Evidence attachments</div>
+          <div class="flex flex-wrap gap-2">${e.ev.map(v=>`<span class="text-xs px-2 py-1 rounded-full bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300 border border-primary-100 dark:border-primary-800">${v}</span>`).join('')}</div>
+        `, `<button class="px-4 py-2.5 rounded-lg bg-primary-600 text-white" onclick="closeModal()">Close</button>`);
+        wrap.appendChild(block);
+      });
+    }
+
+    // RISK & COMPLIANCE
+    function renderRisk() {
+      // Vendor heat
+      const vendor = document.getElementById('vendorHeat');
+      vendor.innerHTML = '';
+      ['A','B','C','D','E','F','G','H','I','J','K','L'].forEach((v,i)=>{
+        const score = Math.floor(Math.random()*100);
+        const color = score>80?'bg-critical/80': score>60?'bg-warning/80': score>40?'bg-yellow-400/70':'bg-emerald-400/80';
+        const cell = document.createElement('div');
+        cell.className = `heat-cell transition text-white text-xs text-center py-6 rounded-lg ${color}`;
+        cell.textContent = `V${v}`;
+        cell.title = `Vendor ${v} — ${score}`;
+        vendor.appendChild(cell);
+      });
+      // Department heat
+      const dept = document.getElementById('deptHeat');
+      dept.innerHTML = '';
+      ['IT','Finance','Ops','Plant','HR','Sales','Legal','QA','Supply'].forEach((d,i)=>{
+        const score = Math.floor(Math.random()*100);
+        const color = score>80?'bg-critical/80': score>60?'bg-warning/80': score>40?'bg-yellow-400/70':'bg-emerald-400/80';
+        const cell = document.createElement('div');
+        cell.className = `heat-cell transition text-white text-xs text-center py-6 rounded-lg ${color}`;
+        cell.textContent = d;
+        cell.title = `${d} — ${score}`;
+        dept.appendChild(cell);
+      });
+      // Clusters
+      const cl = document.getElementById('clusterWrap');
+      cl.innerHTML = '';
+      for (let i=1;i<=12;i++) {
+        const size = 28 + Math.random()*22;
+        const dom = ['Critical','High','Medium'][Math.floor(Math.random()*3)];
+        const bg = dom==='Critical'?'bg-red-500/80':dom==='High'?'bg-orange-500/80':'bg-yellow-500/70';
+        const b = document.createElement('div');
+        b.className = `rounded-full ${bg} text-white text-xs flex items-center justify-center`;
+        b.style.width = `${size}px`; b.style.height = `${size}px`;
+        b.title = `Cluster #${i} — ${dom}`;
+        b.textContent = i;
+        cl.appendChild(b);
+      }
+      // Compliance tracker
+      const items = [
+        { k:'SOX', pct:72, desc:'ITGC Change Mgmt controls' },
+        { k:'GDPR', pct:84, desc:'Records of Processing, DPIA coverage' },
+        { k:'ISO 27001', pct:66, desc:'Access Control & A.12' },
+        { k:'ESG', pct:78, desc:'Supplier disclosures & emissions' },
+      ];
+      const list = document.getElementById('complianceList');
+      list.innerHTML='';
+      items.forEach(it=>{
+        const row = document.createElement('div');
+        row.className = 'p-3 rounded-xl border border-steel-100 dark:border-steel-700 bg-white/60 dark:bg-steel-900/30';
+        row.innerHTML = `
+          <div class="flex items-center justify-between">
+            <div class="font-medium">${it.k}</div>
+            <div class="text-sm text-steel-500">${it.desc}</div>
+          </div>
+          <div class="mt-2 h-2 rounded-full bg-steel-100 dark:bg-steel-700 overflow-hidden">
+            <div class="h-2 bg-gradient-to-r from-emerald-400 via-yellow-400 to-red-500" style="width:${it.pct}%"></div>
+          </div>
+          <div class="mt-1 text-xs text-steel-500">${it.pct}% complete</div>
+        `;
+        list.appendChild(row);
+      });
+    }
+    function openChecklist() {
+      const body = document.getElementById('drawerBody');
+      body.innerHTML = `
+        <div class="text-sm text-steel-600 dark:text-steel-300 mb-3">Mark items to track progress across frameworks.</div>
+        ${['Access control policy','Change approval documented','Vendor DPIA completed','Backup & recovery tested','SoD conflicts reviewed','Incident response drill'].map((t,i)=>`
+          <label class="flex items-center justify-between p-2 rounded-lg border border-steel-200 dark:border-steel-700 mb-2 bg-white/70 dark:bg-steel-900/40">
+            <span class="text-sm">${t}</span>
+            <input type="checkbox" class="accent-primary-600" ${i%2?'checked':''}>
+          </label>
+        `).join('')}
+      `;
+      document.getElementById('drawer').classList.remove('translate-x-full');
+    }
+    function closeDrawer() { document.getElementById('drawer').classList.add('translate-x-full'); }
+    function saveChecklist() { closeDrawer(); toast('Checklist saved'); }
+
+    // REPORTS & EVIDENCE
+    function renderReports() {
+      const grid = document.getElementById('reportGrid');
+      grid.innerHTML = '';
+      const items = [
+        { name:'Executive Summary', type:'PDF', pages:3 },
+        { name:'Detailed Findings', type:'PDF', pages:12 },
+        { name:'Control Effectiveness', type:'Excel', pages:1 },
+        { name:'Remediation Plan', type:'PDF', pages:5 },
+      ];
+      items.forEach((it,i)=>{
+        const card = document.createElement('div');
+        card.className = 'p-4 rounded-xl border border-steel-100 dark:border-steel-700 bg-white/80 dark:bg-steel-900/30';
+        card.innerHTML = `
+          <div class="flex items-center justify-between">
+            <div class="font-medium">${it.name}</div>
+            <span class="text-xs px-2 py-1 rounded-full bg-steel-100 text-steel-700 dark:bg-steel-700 dark:text-steel-200">${it.type}</span>
+          </div>
+          <div class="mt-2 text-sm text-steel-500">${it.pages} page${it.pages>1?'s':''} preview</div>
+          <div class="mt-3 flex items-center gap-2">
+            <button class="px-3 py-2 rounded-lg bg-primary-600 text-white text-sm" onclick="previewReport('${it.name}', ${it.pages})">Preview</button>
+            <button class="px-3 py-2 rounded-lg border border-steel-200 dark:border-steel-700 text-sm" onclick="downloadSample('${it.name}')">Download sample</button>
+          </div>
+        `;
+        grid.appendChild(card);
+      });
+
+      // Evidence tags/filter
+      ['PO','INV','JE','DPIA','CHG','LOG'].forEach(t=> addTagChip(t));
+      renderEvidence();
+    }
+    function previewReport(name, pages) {
+      const slides = Array.from({length: pages}).map((_,i)=>`
+        <div class="p-4 rounded-xl border border-steel-100 dark:border-steel-700 bg-white/90 dark:bg-steel-900/40">
+          <div class="text-sm font-semibold mb-2">${name} — Page ${i+1}</div>
+          <div class="h-40 rounded-lg bg-gradient-to-br from-steel-50 to-white dark:from-steel-900/30 dark:to-steel-900/10 flex items-center justify-center text-steel-500">Sample preview content</div>
+        </div>
+      `).join('');
+      openModal(`${name} (Demo Preview)`, `<div class="space-y-3">${slides}</div>`, `<button class="px-4 py-2.5 rounded-lg bg-primary-600 text-white" onclick="closeModal()">Close</button>`);
+    }
+    function downloadSample(name) {
+      const content = `${name}\nGenerated: ${new Date().toISOString()}\nThis is a demo sample file.`;
+      const blob = new Blob([content], {type:'text/plain'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = name.replace(/\s+/g,'_') + '_Sample.txt';
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+      toast('Sample downloaded');
+    }
+
+    // Evidence
+    const evidenceStore = [
+      { id:1, name:'INV-501.pdf', tags:['INV'], date:'2025-09-01' },
+      { id:2, name:'PO-184.csv', tags:['PO'], date:'2025-09-02' },
+      { id:3, name:'CHG-2103.log', tags:['CHG','LOG'], date:'2025-09-03' },
+      { id:4, name:'DPIA-42.docx', tags:['DPIA'], date:'2025-09-04' },
+    ];
+    let activeTag = '';
+    function addTagChip(tag) {
+      const wrap = document.getElementById('evidenceTags');
+      const chip = document.createElement('button');
+      chip.className = 'text-xs px-2 py-1 rounded-full border border-steel-200 dark:border-steel-700 bg-white dark:bg-steel-900';
+      chip.textContent = tag;
+      chip.onclick = ()=>{
+        activeTag = activeTag===tag? '' : tag;
+        [...wrap.children].forEach(c=> c.classList.remove('bg-primary-50','dark:bg-primary-900/30','text-primary-700','dark:text-primary-300'));
+        if (activeTag) {
+          chip.classList.add('bg-primary-50','dark:bg-primary-900/30','text-primary-700','dark:text-primary-300');
+        }
+        renderEvidence();
+      }
+      wrap.appendChild(chip);
+    }
+    function renderEvidence() {
+      const list = document.getElementById('evidenceList');
+      list.innerHTML = '';
+      evidenceStore.filter(e=> !activeTag || e.tags.includes(activeTag)).forEach(e=>{
+        const row = document.createElement('div');
+        row.className = 'p-3 rounded-lg border border-steel-100 dark:border-steel-700 bg-white/70 dark:bg-steel-900/30 flex items-center justify-between';
+        row.innerHTML = `
+          <div>
+            <div class="text-sm font-medium">${e.name}</div>
+            <div class="mt-1 text-xs text-steel-500 flex items-center gap-2">${e.tags.map(t=>`<span class="px-1.5 py-0.5 rounded bg-steel-100 text-steel-700 dark:bg-steel-700 dark:text-steel-200">${t}</span>`).join('')} <span>${e.date}</span></div>
+          </div>
+          <div class="flex items-center gap-2">
+            <button class="px-2 py-1 rounded-lg border border-steel-200 dark:border-steel-700 text-sm" onclick="previewEvidence('${e.name}')">Preview</button>
+            <button class="px-2 py-1 rounded-lg bg-primary-600 text-white text-sm" onclick="linkEvidence('${e.name}')">Link</button>
+          </div>
+        `;
+        list.appendChild(row);
+      });
+    }
+    function handleEvidence(evt) {
+      const files = [...evt.target.files];
+      files.forEach((f,i)=>{
+        evidenceStore.push({ id: Date.now()+i, name:f.name, tags:['LOG'], date:new Date().toISOString().slice(0,10) });
+      });
+      renderEvidence();
+      toast(`${files.length} item(s) added (local)`);
+      evt.target.value = '';
+    }
+    function previewEvidence(name) {
+      openModal('Evidence Preview', `
+        <div class="text-sm mb-2">${name}</div>
+        <div class="h-48 rounded-lg bg-gradient-to-br from-steel-50 to-white dark:from-steel-900/30 dark:to-steel-900/10 flex items-center justify-center text-steel-500">Preview placeholder</div>
+      `, `<button class="px-4 py-2.5 rounded-lg bg-primary-600 text-white" onclick="closeModal()">Close</button>`);
+    }
+    function linkEvidence(name) { toast(`${name} linked to case`); }
+
+    // REMEDIATION
+    const remediation = [
+      { id:1, title:'Duplicate vendor cleanup', owner:'Priya', due:'2025-10-05', status:'Open' },
+      { id:2, title:'Change Mgmt CAB enforcement', owner:'Marco', due:'2025-09-28', status:'In Progress' },
+      { id:3, title:'SoD matrix review', owner:'Li Wei', due:'2025-10-12', status:'Open' },
+    ];
+    function renderRemediation() {
+      const body = document.getElementById('remediationBody');
+      body.innerHTML = '';
+      remediation.forEach((r,i)=>{
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td class="py-2 px-2">${r.title}</td>
+          <td class="py-2 px-2">${r.owner}</td>
+          <td class="py-2 px-2">${r.due}</td>
+          <td class="py-2 px-2">${statusBadge(r.status)}</td>
+          <td class="py-2 px-2">
+            <select class="px-2 py-1 rounded-lg border border-steel-200 dark:border-steel-700 bg-white dark:bg-steel-900 text-sm" onchange="updateStatus(${i}, this.value)">
+              ${['Open','In Progress','Closed'].map(s=>`<option ${s===r.status?'selected':''}>${s}</option>`).join('')}
+            </select>
+          </td>
+        `;
+        body.appendChild(row);
+      });
+    }
+    function statusBadge(s) {
+      const map = { 'Open':'bg-yellow-50 text-yellow-700 border-yellow-200', 'In Progress':'bg-blue-50 text-blue-700 border-blue-200', 'Closed':'bg-emerald-50 text-emerald-700 border-emerald-200' };
+      return `<span class="text-xs px-2 py-1 rounded-full border ${map[s]}">${s}</span>`;
+    }
+    function updateStatus(i, val) {
+      remediation[i].status = val;
+      renderRemediation();
+      toast('Status updated');
+    }
+
+    // ALERTS
+    const alertStore = [
+      { id:101, sev:'High', agent:'Finance', text:'Unusual vendor payment pattern (3 spikes)', time:'Today' },
+      { id:102, sev:'Medium', agent:'IT', text:'Change merged without reviewer', time:'Today' },
+      { id:103, sev:'Low', agent:'Compliance', text:'ISO control review due', time:'Yesterday' },
+      { id:104, sev:'High', agent:'IoT', text:'Machine vibration outlier cluster', time:'Yesterday' },
+      { id:105, sev:'Medium', agent:'Finance', text:'Round-dollar invoices > threshold', time:'2 days' },
+    ];
+    function renderAlerts() {
+      const list = document.getElementById('alertList');
+      list.innerHTML = '';
+      const groups = {};
+      alertStore.forEach(a=>{
+        groups[a.agent] = groups[a.agent] || [];
+        groups[a.agent].push(a);
+      });
+      Object.keys(groups).forEach(agent=>{
+        const box = document.createElement('div');
+        box.className = 'p-4 rounded-xl border border-steel-100 dark:border-steel-700 bg-white/70 dark:bg-steel-900/30';
+        const items = groups[agent].map(a=> `
+          <div class="p-3 rounded-lg border border-steel-100 dark:border-steel-700 bg-white/60 dark:bg-steel-900/40 flex items-center justify-between">
+            <div class="text-sm">${a.text}</div>
+            <div class="flex items-center gap-2">
+              ${sevTag(a.sev)}
+              <span class="text-xs text-steel-500">${a.time}</span>
+              <button class="px-2 py-1 rounded-lg border border-steel-200 dark:border-steel-700 text-xs" onclick="markAlert(${a.id})">Mark read</button>
+            </div>
+          </div>
+        `).join('');
+        box.innerHTML = `
+          <div class="flex items-center justify-between mb-3">
+            <div class="font-medium">${agent} Agent</div>
+            <div class="text-xs text-steel-500">${groups[agent].length} alerts</div>
+          </div>
+          <div class="space-y-2">${items}</div>
+        `;
+        list.appendChild(box);
+      });
+    }
+    function sevTag(s) {
+      const map = { High:'bg-red-100 text-red-700', Medium:'bg-yellow-100 text-yellow-700', Low:'bg-emerald-100 text-emerald-700' };
+      return `<span class="text-[11px] px-1.5 py-0.5 rounded ${map[s]}">${s}</span>`;
+    }
+    function markAlert(id) {
+      const idx = alertStore.findIndex(a=>a.id===id);
+      if (idx>-1) { alertStore.splice(idx,1); renderAlerts(); toast('Alert marked as read'); }
+    }
+    function filterAlerts() {
+      const sev = document.getElementById('alertSeverity').value;
+      const agent = document.getElementById('alertAgent').value;
+      const filtered = alertStore.filter(a=> (!sev || a.sev===sev) && (!agent || a.agent===agent));
+      const list = document.getElementById('alertList');
+      list.innerHTML = '';
+      const groups = {};
+      filtered.forEach(a=> (groups[a.agent]=groups[a.agent]||[]).push(a));
+      Object.keys(groups).forEach(agent=>{
+        const box = document.createElement('div');
+        box.className = 'p-4 rounded-xl border border-steel-100 dark:border-steel-700 bg-white/70 dark:bg-steel-900/30';
+        box.innerHTML = `
+          <div class="flex items-center justify-between mb-3">
+            <div class="font-medium">${agent} Agent</div>
+            <div class="text-xs text-steel-500">${groups[agent].length} alerts</div>
+          </div>
+          <div class="space-y-2">
+            ${groups[agent].map(a=>`
+              <div class="p-3 rounded-lg border border-steel-100 dark:border-steel-700 bg-white/60 dark:bg-steel-900/40 flex items-center justify-between">
+                <div class="text-sm">${a.text}</div>
+                <div class="flex items-center gap-2">
+                  ${sevTag(a.sev)}
+                  <span class="text-xs text-steel-500">${a.time}</span>
+                  <button class="px-2 py-1 rounded-lg border border-steel-200 dark:border-steel-700 text-xs" onclick="markAlert(${a.id})">Mark read</button>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        `;
+        list.appendChild(box);
+      });
+    }
+    // VENDORS
+    // ----------------------------
+    // Simple in-memory data store
+    // ----------------------------
+    const store = {
+      role: 'User', // 'User' | 'Admin' | 'Vendor'
+      admin: { currentRequestId: null, currentStep: 'Validate' }, // 'Validate' | 'Vendors' | 'Quotes' | 'Contract'
+      vendorPortal: { activeVendorId: 'v1' },
+      feedbackDraft: { requestId: null, rating: 0 },
+      vendors: [
+        { id: 'v1', name: 'Sonic Rentals', tags: ['audio','events'], revenue: 1200000, profile: 88, rating: 4.6, reviews: [{rating:5, comment:'Great sound quality and timely setup.'},{rating:4, comment:'Good service, minor delay in setup.'}], },
+        { id: 'v2', name: 'StageCraft AV', tags: ['audio','lighting','events'], revenue: 2200000, profile: 92, rating: 4.8, reviews: [{rating:5, comment:'Exceptional AV coordination.'},{rating:5, comment:'Professional team, flawless execution.'}] },
+        { id: 'v3', name: 'BlueWave Tech', tags: ['it','audio'], revenue: 800000, profile: 81, rating: 4.3, reviews: [{rating:4, comment:'Solid delivery, minor delays.'},{rating:4, comment:'Technical expertise is good.'}] },
+        { id: 'v4', name: 'EventHive', tags: ['events','decor','audio'], revenue: 1500000, profile: 85, rating: 4.5, reviews: [{rating:5, comment:'Professional crew and great value.'},{rating:4, comment:'Creative solutions, on time.'}] },
+        { id: 'v5', name: 'PrimeSound Co.', tags: ['audio'], revenue: 950000, profile: 79, rating: 4.1, reviews: [{rating:4, comment:'Good equipment, responsive team.'},{rating:4, comment:'Reliable but could improve communication.'}] },
+      ],
+      requests: [
+        // Past sample requests for history/reuse
+        {
+          id: 'hist-101',
+          isTemplate: true,
+          title: 'Small Event Audio Pack',
+          text: 'Basic audio setup for a small corporate huddle.',
+          items: ['2x Wireless Microphones', '2x PA Speakers', 'Audio Mixer', 'Stands & Cables'],
+          files: [],
+          status: 'Closed',
+          questionnaires: [
+            'Confirm availability date',
+            'Warranty/Support details',
+            'Delivery/Setup time'
+          ],
+          vendorsSelected: [],
+          quotes: []
+        }
+      ]
+    };
+
+    // Utility to make unique IDs
+    const uid = (p='id') => `${p}-${Math.random().toString(36).slice(2,9)}`;
+
+    // ----------------------------
+    // AI-like helpers (simple demo)
+    // ----------------------------
+    function aiSuggestItems(text) {
+      const t = (text || '').toLowerCase();
+      let suggestions = [];
+      if (t.includes('music') || t.includes('sound') || t.includes('audio')) {
+        suggestions.push('Wireless Microphones', 'DJ Controller', 'PA Speakers', 'Audio Mixer', 'XLR Cables', 'On-site Technician');
+      }
+      if (t.includes('event')) {
+        suggestions.push('Delivery & Setup', 'Power Extension Cords', 'Event Coordinator');
+      }
+      if (t.includes('lighting')) {
+        suggestions.push('Stage Lights', 'Light Controller');
+      }
+      if (suggestions.length === 0) {
+        suggestions = ['Delivery & Setup', 'Vendor Coordination'];
+      }
+      return [...new Set(suggestions)];
+    }
+
+    function computeQuoteScores(request) {
+      const vendorsById = Object.fromEntries(store.vendors.map(v => [v.id, v]));
+      const items = request.items || [];
+      const maxRevenue = Math.max(...store.vendors.map(v => v.revenue));
+      (request.quotes || []).forEach(q => {
+        const vendor = vendorsById[q.vendorId];
+        const matched = q.itemsCovered ? Math.min(q.itemsCovered, items.length) : Math.floor(items.length * 0.7);
+        const relevance = items.length > 0 ? Math.round((matched / items.length) * 100) : 60;
+        const profile = vendor.profile;
+        const revenueScore = Math.round((vendor.revenue / maxRevenue) * 100);
+        const score = Math.round(relevance * 0.5 + profile * 0.3 + revenueScore * 0.2);
+        q.scores = { relevance, profile, revenue: revenueScore, total: score };
+      });
+      request.quotes.sort((a,b) => (b.scores?.total || 0) - (a.scores?.total || 0));
+    }
+
+    function recomputeVendorRating(vendor) {
+      const reviews = vendor.reviews || [];
+      if (!reviews.length) return;
+      const avg = reviews.reduce((s,r)=>s+(r.rating||0), 0) / reviews.length;
+      vendor.rating = Math.round(avg * 10) / 10;
+    }
+
+    function lastFeedbackSnippet(vendor) {
+      const r = vendor.reviews?.[vendor.reviews.length - 1];
+      return r?.comment || '';
+    }
+
+    function extractTagsFromRequest(r) {
+      const tags = new Set();
+      const txt = (r.text || '').toLowerCase() + ' ' + (r.items || []).join(' ').toLowerCase();
+      if (/(music|audio|sound|speaker|microphone|mixer)/.test(txt)) tags.add('audio');
+      if (/(event|venue|stage)/.test(txt)) tags.add('events');
+      if (/(light|lighting)/.test(txt)) tags.add('lighting');
+      if (/(it|tech|network)/.test(txt)) tags.add('it');
+      return Array.from(tags);
+    }
+
+    // Render helpers
+    function renderStars(rating, size='text-sm') {
+      const full = Math.floor(rating || 0);
+      const half = (rating - full) >= 0.5 ? 1 : 0;
+      const total = 5;
+      let out = '';
+      for (let i=1; i<=total; i++) {
+        if (i <= full) out += `<span class="${size} text-amber-500">★</span>`;
+        else if (i === full + 1 && half) out += `<span class="${size} text-amber-500">☆</span>`;
+        else out += `<span class="${size} text-slate-300">☆</span>`;
+      }
+      return out;
+    }
+
+    // ----------------------------
+    // Rendering core
+    // ----------------------------
+    function setRole(role) {
+      store.role = role;
+      if (role === 'Admin' && !store.admin.currentRequestId) {
+        store.admin.currentStep = 'Validate';
+      }
+      render();
+    }
+
+    function setAdminStep(step) {
+      store.admin.currentStep = step;
+      render();
+    }
+
+    function selectAdminRequest(id) {
+      store.admin.currentRequestId = id;
+      store.admin.currentStep = 'Validate';
+      render();
+    }
+
+    function badge(text, color='brand') {
+      return `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-${color}-100 text-${color}-800 border border-${color}-200">${text}</span>`;
+    }
+
+    function statusBadge(status) {
+      const map = {
+        'Submitted': 'sky',
+        'InReview': 'violet',
+        'SentForUserConfirmation': 'amber',
+        'UserConfirmed': 'emerald',
+        'RFQSent': 'indigo',
+        'QuotesReceived': 'cyan',
+        'Shortlisted': 'purple',
+        'ContractSent': 'pink',
+        'Closed': 'slate'
+      };
+      const c = map[status] || 'slate';
+      return `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-${c}-100 text-${c}-800 border border-${c}-200">
+        <span class="h-1.5 w-1.5 rounded-full bg-${c}-500"></span>${status}
+      </span>`;
+    }
+
+    function currency(n) {
+      return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n || 0);
+    }
+
+    // ----------------------------
+    // User Role View
+    // ----------------------------
+    function renderUser() {
+      const pendingReview = store.requests.find(r => r.status === 'SentForUserConfirmation' && !r.isTemplate);
+      const myRequests = store.requests.filter(r => !r.isTemplate).sort((a,b)=> b.createdAt - a.createdAt);
+
+      return `
+        <section class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div class="lg:col-span-2 space-y-6">
+            ${pendingReview ? renderUserReview(pendingReview) : renderUserSubmit()}
+            ${renderUserFeedbackBlocks()}
+            <div class="bg-white/80 backdrop-blur rounded-2xl border border-white shadow-soft p-5">
+              <div class="flex items-center justify-between mb-3">
+                <h3 class="font-semibold text-slate-900">My Requests</h3>
+                <span class="text-xs text-slate-500">${myRequests.length} total</span>
+              </div>
+              <div class="divide-y divide-slate-100">
+                ${myRequests.length === 0 ? `
+                  <div class="py-8 text-center text-slate-500">No requests yet. Submit your first requirement above.</div>
+                ` : myRequests.map(r => `
+                  <div class="py-3 flex items-center justify-between gap-3">
+                    <div class="min-w-0">
+                      <div class="font-medium text-slate-900 truncate">${r.title || 'Requirement'}</div>
+                      <div class="text-xs text-slate-500 truncate">${r.text}</div>
+                      ${r.feedback ? `<div class="mt-1 text-xs text-slate-600">Your rating: ${renderStars(r.feedback.rating, 'text-xs')}</div>` : ''}
+                    </div>
+                    <div class="flex items-center gap-2">
+                      ${statusBadge(r.status)}
+                      ${r.status === 'Closed' && !r.feedback ? `<button onclick="openFeedback('${r.id}')" class="rounded-lg bg-emerald-600 text-white px-3 py-1.5 text-xs">Give Feedback</button>` : ''}
+                      <button onclick="viewUserRequest('${r.id}')" class="text-brand-600 hover:text-brand-700 text-sm font-medium">View</button>
+                    </div>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          </div>
+          <aside class="space-y-6">
+            <div class="bg-white/80 backdrop-blur rounded-2xl border border-white shadow-soft p-5">
+              <h3 class="font-semibold text-slate-900 mb-2">How this works</h3>
+              <ol class="text-sm text-slate-600 space-y-2 list-decimal list-inside">
+                <li>Describe your requirement and add files.</li>
+                <li>Admin validates and sends back a final list.</li>
+                <li>Confirm, then Admin searches vendors and requests quotes.</li>
+                <li>Admin shortlists, selects a vendor, sends contract, delivery happens.</li>
+                <li>You rate the experience after delivery.</li>
+              </ol>
+              <div class="mt-4 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+                Demo note: No real uploads. File names are shown for preview only.
+              </div>
+            </div>
+            <div class="bg-gradient-to-br from-brand-100 to-accent-100 rounded-2xl border border-white shadow-soft p-5">
+              <h3 class="font-semibold text-slate-900 mb-2">Quick tip</h3>
+              <p class="text-sm text-slate-700">Try mentioning "music system" to see smart suggestions.</p>
+            </div>
+          </aside>
+        </section>
+      `;
+    }
+
+    function renderUserFeedbackBlocks() {
+      // Show a prompt block if any request is closed and needs feedback
+      const needFb = store.requests.find(r => r.status === 'Closed' && !r.feedback && !r.isTemplate);
+      if (!needFb) return '';
+      return `
+        <div class="bg-emerald-50 border border-emerald-200 rounded-2xl p-4">
+          <div class="flex items-center justify-between">
+            <div>
+              <div class="font-medium text-emerald-900">Service delivered</div>
+              <div class="text-sm text-emerald-700">Please rate your experience for "${needFb.title || 'Requirement'}".</div>
+            </div>
+            <button onclick="openFeedback('${needFb.id}')" class="rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 text-sm">Give Feedback</button>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderUserSubmit() {
+      return `
+        <div class="bg-white/80 backdrop-blur rounded-2xl border border-white shadow-soft p-6">
+          <div class="flex items-center justify-between mb-4">
+            <h2 class="text-lg font-semibold text-slate-900">Submit a Requirement</h2>
+                     </div>
+          <form onsubmit="handleUserSubmit(event)" class="space-y-4">
+            <div>
+              <label class="block text-sm font-medium text-slate-700 mb-1">Requirement details</label>
+              <textarea id="u_text" required rows="4" placeholder="e.g. I need a music system for an event on 22nd August" class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 focus:ring-2 focus:ring-brand-400 outline-none"></textarea>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div class="sm:col-span-2">
+                <label class="block text-sm font-medium text-slate-700 mb-1">Event date (optional)</label>
+                <input id="u_date" type="date" class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 focus:ring-2 focus:ring-brand-400 outline-none" />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-slate-700 mb-1">Attach documents</label>
+                <input id="u_files" type="file" multiple class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 focus:ring-2 focus:ring-brand-400 outline-none" />
+              </div>
+            </div>
+            <div id="u_filelist" class="flex flex-wrap gap-2 text-xs"></div>
+            <div class="flex items-center gap-3 pt-2">
+              <button class="inline-flex items-center gap-2 rounded-xl bg-brand-600 hover:bg-brand-700 text-white px-4 py-2.5 shadow-soft">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 opacity-90" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 4a1 1 0 011 1v6h6a1 1 0 110 2h-6v6a1 1 0 11-2 0v-6H5a1 1 0 110-2h6V5a1 1 0 011-1z"/>
+                </svg>
+                Submit Requirement
+              </button>
+              <span class="text-sm text-slate-500">You'll get a confirmation after Admin validates it.</span>
+            </div>
+          </form>
+        </div>
+      `;
+    }
+
+    function renderUserReview(req) {
+      const items = req.items || [];
+      return `
+        <div class="bg-white/80 backdrop-blur rounded-2xl border border-white shadow-soft p-6">
+          <div class="flex items-center justify-between mb-2">
+            <h2 class="text-lg font-semibold text-slate-900">Review and Confirm</h2>
+            ${statusBadge(req.status)}
+          </div>
+          <p class="text-sm text-slate-600 mb-4">Admin finalized these items. Please confirm or request changes.</p>
+          <div class="space-y-3">
+            <div class="bg-slate-50 border border-slate-200 rounded-xl p-3">
+              <div class="text-xs text-slate-500 mb-1">Original request</div>
+              <div class="text-sm text-slate-800">${req.text}</div>
+            </div>
+            <div>
+              <div class="text-sm font-medium text-slate-900 mb-2">Finalized items</div>
+              <div class="flex flex-wrap gap-2">
+                ${items.map(i => `<span class="inline-flex items-center gap-1 bg-emerald-50 text-emerald-900 border border-emerald-200 px-2 py-1 rounded-full text-xs">
+                  <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>${i}
+                </span>`).join('')}
+              </div>
+            </div>
+            <form onsubmit="handleUserConfirmation(event, '${req.id}')" class="space-y-3">
+              <div>
+                <label class="block text-sm font-medium text-slate-700 mb-1">Add a comment (optional)</label>
+                <input id="u_confirm_comment" type="text" placeholder="Looks good!" class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 focus:ring-2 focus:ring-brand-400 outline-none" />
+              </div>
+              <div class="flex flex-wrap items-center gap-3">
+                <button class="rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5">Approve</button>
+                <button type="button" onclick="userRequestChanges('${req.id}')" class="rounded-xl bg-amber-500 hover:bg-amber-600 text-white px-4 py-2.5">Request Changes</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      `;
+    }
+
+    function viewUserRequest(id) {
+      const r = store.requests.find(x => x.id === id);
+      if (!r) return;
+      alert(`Request: ${r.title || 'Requirement'}\nStatus: ${r.status}\n\n${r.text}`);
+    }
+
+    function handleUserSubmit(e) {
+      e.preventDefault();
+      const text = document.getElementById('u_text').value.trim();
+      const date = document.getElementById('u_date').value;
+      const files = Array.from(document.getElementById('u_files').files || []).map(f => ({ name: f.name, size: f.size }));
+      if (!text) return;
+
+      const id = uid('req');
+      store.requests.push({
+        id,
+        createdAt: Date.now(),
+        title: date ? `Requirement for ${new Date(date).toLocaleDateString()}` : 'New Requirement',
+        text,
+        files,
+        items: [],
+        suggestions: [],
+        status: 'Submitted',
+        questionnaires: ['Confirm availability date', 'Warranty/Support details', 'Delivery/Setup time'],
+        vendorsSelected: [],
+        quotes: [],
+        vendorSearchDone: false,
+        filterTag: null
+      });
+
+      // Clear form
+      document.getElementById('u_text').value = '';
+      document.getElementById('u_date').value = '';
+      document.getElementById('u_files').value = '';
+      document.getElementById('u_filelist').innerHTML = '';
+      render();
+      toast('Requirement submitted. Admin will review it shortly.');
+    }
+
+    function handleUserConfirmation(e, id) {
+      e.preventDefault();
+      const r = store.requests.find(x => x.id === id);
+      if (!r) return;
+      r.status = 'UserConfirmed';
+      toast('Thanks! Your requirement is confirmed.');
+      // Keep auto-route to Admin Vendors as requested
+      store.role = 'Admin';
+      store.admin.currentRequestId = id;
+      store.admin.currentStep = 'Vendors';
+      render();
+    }
+
+    function userRequestChanges(id) {
+      const r = store.requests.find(x => x.id === id);
+      if (!r) return;
+      const extra = prompt('Describe the change you want:');
+      if (extra && extra.trim()) {
+        r.text += `\n\nUser note: ${extra.trim()}`;
+        r.status = 'Submitted';
+        r.items = [];
+        r.suggestions = [];
+        toast('Change request sent back to Admin.');
+        render();
+      }
+    }
+
+    // Track chosen file names in user submit view
+    document.addEventListener('change', (e) => {
+      if (e.target && e.target.id === 'u_files') {
+        const list = Array.from(e.target.files || []);
+        document.getElementById('u_filelist').innerHTML = list.map(f =>
+          `<span class="inline-flex items-center gap-1 bg-slate-100 text-slate-700 border border-slate-200 px-2 py-1 rounded-full">${f.name}</span>`
+        ).join('');
+      }
+    });
+
+    // ----------------------------
+    // Admin Role View
+    // ----------------------------
+    function renderAdmin() {
+      const newRequests = store.requests.filter(r => !r.isTemplate && (r.status === 'Submitted' || r.status === 'InReview'));
+      const allRequests = store.requests.filter(r => !r.isTemplate).sort((a,b)=>b.createdAt - a.createdAt);
+      const templates = store.requests.filter(r => r.isTemplate);
+      const current = store.requests.find(r => r.id === store.admin.currentRequestId);
+
+      return `
+        <section class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div class="lg:col-span-2 space-y-6">
+            ${current ? renderAdminRequestDetail(current) : `
+              <div class="bg-white/80 backdrop-blur rounded-2xl border border-white shadow-soft p-5">
+                <div class="flex items-center justify-between mb-3">
+                  <h3 class="font-semibold text-slate-900">New Requests</h3>
+                  <span class="text-xs text-slate-500">${newRequests.length} waiting</span>
+                </div>
+                <div class="divide-y divide-slate-100">
+                  ${newRequests.length === 0 ? `<div class="py-10 text-center text-slate-500">No new requests right now.</div>` :
+                    newRequests.map(r => `
+                      <div class="py-3 flex items-center justify-between gap-3">
+                        <div class="min-w-0">
+                          <div class="font-medium text-slate-900 truncate">${r.title || 'Requirement'}</div>
+                          <div class="text-xs text-slate-500 truncate">${r.text}</div>
+                        </div>
+                        <div class="flex items-center gap-2">
+                          ${statusBadge(r.status)}
+                          <button onclick="selectAdminRequest('${r.id}')" class="rounded-lg bg-brand-600 hover:bg-brand-700 text-white px-3 py-1.5 text-sm">Open</button>
+                        </div>
+                      </div>
+                    `).join('')
+                  }
+                </div>
+              </div>
+              <div class="bg-white/80 backdrop-blur rounded-2xl border border-white shadow-soft p-5">
+                <div class="flex items-center justify-between mb-3">
+                  <h3 class="font-semibold text-slate-900">All Requests</h3>
+                  <span class="text-xs text-slate-500">${allRequests.length} total</span>
+                </div>
+                <div class="grid md:grid-cols-2 gap-3">
+                  ${allRequests.map(r => `
+                    <div class="rounded-xl border border-slate-100 bg-white p-3 flex flex-col">
+                      <div class="flex items-center justify-between">
+                        <div class="font-medium text-slate-900 truncate pr-2">${r.title || 'Requirement'}</div>
+                        ${statusBadge(r.status)}
+                      </div>
+                      <div class="text-xs text-slate-500 mt-1 line-clamp-2">${r.text}</div>
+                      <div class="mt-3">
+                        <button onclick="selectAdminRequest('${r.id}')" class="text-brand-600 hover:text-brand-700 text-sm font-medium">Manage</button>
+                      </div>
+                    </div>
+                  `).join('')}
+                </div>
+              </div>
+            `}
+          </div>
+          <aside class="space-y-6">
+            <div class="bg-white/80 backdrop-blur rounded-2xl border border-white shadow-soft p-5">
+              <h3 class="font-semibold text-slate-900 mb-2">Requirement history</h3>
+              <div class="space-y-3">
+                ${templates.map(t => `
+                  <div class="rounded-xl border border-slate-100 bg-slate-50 p-3">
+                    <div class="text-sm font-medium text-slate-900">${t.title}</div>
+                    <div class="text-xs text-slate-600 line-clamp-2">${t.text}</div>
+                    <div class="mt-2 flex flex-wrap gap-1">
+                      ${t.items.map(i => `<span class="bg-white border border-slate-200 text-slate-700 rounded-full px-2 py-0.5 text-[11px]">${i}</span>`).join('')}
+                    </div>
+                    <div class="mt-2">
+                      <button onclick="reuseTemplate('${t.id}')" class="rounded-lg bg-slate-900 text-white px-3 py-1.5 text-xs">Reuse</button>
+                    </div>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+            <div class="bg-gradient-to-br from-accent-100 to-brand-100 rounded-2xl border border-white shadow-soft p-5">
+              <h3 class="font-semibold text-slate-900 mb-2">Shortcuts</h3>
+              <div class="flex flex-wrap gap-2">
+                <button onclick="createBlankRequest()" class="rounded-lg bg-white text-slate-900 border border-slate-200 px-3 py-1.5 text-xs">New blank request</button>
+                <button onclick="jumpToQuotes()" class="rounded-lg bg-white text-slate-900 border border-slate-200 px-3 py-1.5 text-xs">Quotes view</button>
+              </div>
+            </div>
+          </aside>
+        </section>
+      `;
+    }
+
+    function renderAdminRequestDetail(r) {
+      const canGoVendors = r.status === 'UserConfirmed' || ['RFQSent','QuotesReceived','Shortlisted','ContractSent','Closed'].includes(r.status);
+      const canGoQuotes = ['RFQSent','QuotesReceived','Shortlisted','ContractSent','Closed'].includes(r.status);
+      const canGoContract = ['QuotesReceived','Shortlisted','ContractSent','Closed'].includes(r.status) && (r.quotes || []).length > 0;
+
+      const stepContent = {
+        'Validate': renderAdminValidate(r),
+        'Vendors': canGoVendors ? renderAdminVendors(r) : renderStepLocked('Waiting for user confirmation'),
+        'Quotes': canGoQuotes ? renderAdminQuotes(r) : renderStepLocked('Send RFQ to vendors to view quotes here'),
+        'Contract': canGoContract ? renderAdminContract(r) : renderStepLocked('Shortlist and select a vendor first')
+      }[store.admin.currentStep];
+
+      return `
+        <div class="bg-white/80 backdrop-blur rounded-2xl border border-white shadow-soft p-5">
+          <div class="flex items-center justify-between flex-wrap gap-2 mb-3">
+            <div>
+              <div class="text-xs uppercase tracking-wider text-slate-500">Managing Request</div>
+              <div class="text-lg font-semibold text-slate-900">${r.title || 'Requirement'}</div>
+            </div>
+            <div class="flex items-center gap-2">
+              ${statusBadge(r.status)}
+              <button class="rounded-lg bg-slate-900 text-white px-3 py-1.5 text-sm" onclick="store.admin.currentRequestId=null; render()">Back</button>
+            </div>
+          </div>
+
+          <div class="flex flex-wrap items-center gap-2 mb-4">
+            ${['Validate','Vendors','Quotes','Contract'].map(s => `
+              <button onclick="setAdminStep('${s}')" class="px-3 py-1.5 rounded-full text-sm font-medium border ${store.admin.currentStep===s ? 'bg-brand-600 text-white border-brand-600' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'}">${s}</button>
+            `).join('')}
+          </div>
+
+          <div>${stepContent}</div>
+        </div>
+      `;
+    }
+
+    function renderStepLocked(msg) {
+      return `
+        <div class="rounded-xl border border-slate-200 bg-slate-50 p-6 text-center text-slate-600">
+          ${msg}
+        </div>
+      `;
+    }
+
+    function renderAdminValidate(r) {
+      const suggestions = r.suggestions || [];
+      const items = r.items || [];
+      const files = r.files || [];
+
+      return `
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div class="lg:col-span-2 space-y-4">
+            <div class="rounded-xl border border-slate-200 bg-white p-4">
+              <div class="text-sm font-medium text-slate-900 mb-2">Original Requirement</div>
+              <p class="text-sm text-slate-700 whitespace-pre-line">${r.text}</p>
+              ${files.length ? `
+                <div class="mt-3 flex flex-wrap gap-2 text-xs">
+                  ${files.map(f => `<span class="bg-slate-50 border border-slate-200 text-slate-700 rounded-full px-2 py-0.5">${f.name}</span>`).join('')}
+                </div>
+              ` : ''}
+            </div>
+
+            <div class="rounded-xl border border-slate-200 bg-white p-4">
+              <div class="flex items-center justify-between mb-3">
+                <div class="text-sm font-medium text-slate-900">Validation</div>
+                <button onclick="validateRequirement('${r.id}')" class="inline-flex items-center gap-2 rounded-lg bg-accent-600 hover:bg-accent-700 text-white px-3 py-1.5 text-sm">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 opacity-90" viewBox="0 0 24 24" fill="currentColor"><path d="M11 3a1 1 0 011 1v7h7a1 1 0 110 2h-7v7a1 1 0 11-2 0v-7H3a1 1 0 110-2h7V4a1 1 0 011-1z"/></svg>
+                  Validate Requirement
+                </button>
+              </div>
+
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="rounded-lg border border-slate-200 p-3">
+                  <div class="text-xs font-medium text-slate-700 mb-2">AI Suggestions</div>
+                  <div id="sug_${r.id}" class="flex flex-wrap gap-2">
+                    ${suggestions.length ? suggestions.map(s => `
+                      <button onclick="addItem('${r.id}', '${s.replace(/'/g,"&apos;")}')" class="text-xs bg-brand-50 hover:bg-brand-100 border border-brand-200 text-brand-800 rounded-full px-2 py-1">${s}</button>
+                    `).join('') : `<div class="text-xs text-slate-500">Click "Validate Requirement" to get suggestions</div>`}
+                  </div>
+                </div>
+                <div class="rounded-lg border border-slate-200 p-3">
+                  <div class="text-xs font-medium text-slate-700 mb-2">Finalized Items</div>
+                  <div id="items_${r.id}" class="flex flex-wrap gap-2 min-h-[38px]">
+                    ${items.length ? items.map(i => `
+                      <span class="inline-flex items-center gap-1 bg-emerald-50 text-emerald-900 border border-emerald-200 px-2 py-1 rounded-full text-xs">
+                        ${i}
+                        <button title="Remove" onclick="removeItem('${r.id}','${i.replace(/'/g,"&apos;")}')" class="text-emerald-700 hover:text-emerald-900">×</button>
+                      </span>
+                    `).join('') : `<div class="text-xs text-slate-500">No items yet</div>`}
+                  </div>
+                  <div class="mt-3 flex gap-2">
+                    <input id="add_${r.id}" type="text" placeholder="Add custom item" class="flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm focus:ring-2 focus:ring-brand-400 outline-none">
+                    <button onclick="addCustomItem('${r.id}')" class="rounded-lg bg-slate-900 text-white px-3 py-2 text-sm">Add</button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="mt-4 flex flex-wrap items-center gap-2">
+                <button onclick="sendToUserConfirmation('${r.id}')" class="rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5">Finalize & Send to User</button>
+                <span class="text-sm text-slate-500">User will be prompted to approve.</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="space-y-4">
+            <div class="rounded-xl border border-slate-200 bg-white p-4">
+              <div class="text-sm font-medium text-slate-900 mb-2">Quick Actions</div>
+              <div class="flex flex-wrap gap-2">
+                <button onclick="quickSelect('${r.id}', ['Wireless Microphones','PA Speakers','Audio Mixer'])" class="rounded-lg bg-white border border-slate-200 px-3 py-1.5 text-sm hover:bg-slate-50">Small audio kit</button>
+                <button onclick="quickSelect('${r.id}', ['Stage Lights','Light Controller','Delivery & Setup'])" class="rounded-lg bg-white border border-slate-200 px-3 py-1.5 text-sm hover:bg-slate-50">Add lighting</button>
+              </div>
+            </div>
+
+            <div class="rounded-xl border border-slate-200 bg-white p-4">
+              <div class="text-sm font-medium text-slate-900 mb-2">Progress</div>
+              <ul class="text-sm text-slate-600 space-y-2">
+                <li>Validation ${r.items?.length ? badge('Ready','emerald') : badge('Pending','amber')}</li>
+                <li>User Confirmation ${r.status === 'UserConfirmed' ? badge('Done','emerald') : badge('Waiting','amber')}</li>
+                <li>RFQ ${['RFQSent','QuotesReceived','Shortlisted','ContractSent','Closed'].includes(r.status) ? badge('Sent','indigo') : badge('Not sent','slate')}</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderAdminVendors(r) {
+      const selected = new Set(r.vendorsSelected || []);
+      const anySelected = selected.size > 0;
+      const queryTags = ['audio','events','lighting','it'];
+
+      const filters = extractTagsFromRequest(r);
+      const hasSearched = !!r.vendorSearchDone;
+      const filtered = (r.filteredVendors && r.filteredVendors.length) ? r.filteredVendors : store.vendors;
+      const finalList = r.filterTag ? filtered.filter(v => v.tags.includes(r.filterTag)) : filtered;
+
+      return `
+        <div class="space-y-4">
+          <div class="rounded-2xl border border-slate-200 bg-white p-4">
+            <div class="flex items-center justify-between">
+              <div class="text-sm font-medium text-slate-900">Search Vendors</div>
+              ${!hasSearched ? `
+                <button onclick="searchVendors('${r.id}')" class="rounded-lg bg-slate-900 text-white px-3 py-1.5 text-sm">Search Vendors</button>
+              ` : `
+                <div class="text-xs text-slate-600">Suggested tags: ${filters.length ? filters.map(t=>`#${t}`).join(' ') : '— none'}</div>
+              `}
+            </div>
+            ${!hasSearched ? `<div class="text-sm text-slate-600 mt-2">Run a quick search to populate the vendor list based on the requirement.</div>` :
+            `<div class="mt-3 flex items-center gap-2 text-xs">
+              <span class="text-slate-600">Filter:</span>
+              <button onclick="clearVendorFilter('${r.id}')" class="rounded-full ${r.filterTag?'bg-white':'bg-slate-900 text-white'} border border-slate-200 px-2 py-1">All</button>
+              ${queryTags.map(t => `<button onclick="filterVendors('${r.id}','${t}')" class="rounded-full ${r.filterTag===t?'bg-slate-900 text-white':'bg-white'} border border-slate-200 px-2 py-1">#${t}</button>`).join('')}
+            </div>`}
+          </div>
+
+          <div class="rounded-2xl border border-slate-200 bg-white p-4">
+            <div class="flex items-center justify-between mb-3">
+              <div class="text-sm font-medium text-slate-900">Vendor Directory</div>
+              <div class="text-xs text-slate-500">${hasSearched ? `${finalList.length} found` : '0 found'}</div>
+            </div>
+            ${!hasSearched ? `<div class="text-center text-slate-500 py-8">Click "Search Vendors" to populate the list.</div>` : `
+            <div class="grid sm:grid-cols-2 gap-3">
+              ${finalList.map(v => `
+                <label class="rounded-xl border border-slate-200 bg-white p-3 flex gap-3 items-start hover:border-brand-300">
+                  <input type="checkbox" ${selected.has(v.id) ? 'checked' : ''} onchange="toggleVendorSelect('${r.id}','${v.id}', this.checked)" class="mt-1 rounded border-slate-300 text-brand-600 focus:ring-brand-500">
+                  <div class="min-w-0 flex-1">
+                    <div class="flex items-center justify-between gap-3">
+                      <div class="font-medium text-slate-900 truncate">${v.name}</div>
+                      <div class="text-xs text-slate-500">${v.tags.map(t => `#${t}`).join(' ')}</div>
+                    </div>
+                    <div class="flex items-center gap-2 mt-1">
+                      <div class="flex items-center gap-1">${renderStars(v.rating, 'text-xs')}</div>
+                      <span class="text-xs text-slate-600">${v.rating} (${v.reviews?.length || 0} reviews)</span>
+                    </div>
+                    <div class="text-xs text-slate-600 mt-1 flex items-center gap-2">
+                      <span>Revenue: ${currency(v.revenue)}</span>
+                      <span>· Profile: ${v.profile}</span>
+                    </div>
+                    ${v.reviews?.length ? `
+                      <div class="mt-2 space-y-1">
+                        <div class="text-xs font-medium text-slate-700">Recent feedback:</div>
+                        ${v.reviews.slice(-2).map(review => `
+                          <div class="text-xs bg-slate-50 border border-slate-200 rounded-lg px-2 py-1">
+                            <div class="flex items-center gap-1 mb-0.5">
+                              ${renderStars(review.rating, 'text-[10px]')}
+                            </div>
+                            <div class="text-slate-600 line-clamp-2">"${review.comment}"</div>
+                          </div>
+                        `).join('')}
+                      </div>
+                    ` : `<div class="text-xs text-slate-500 mt-1">No reviews yet</div>`}
+                  </div>
+                </label>
+              `).join('')}
+            </div>
+            <div class="mt-4 flex items-center gap-2">
+              <button ${anySelected ? '' : 'disabled'} onclick="sendRFQ('${r.id}')" class="rounded-xl ${anySelected ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-slate-300'} text-white px-4 py-2.5">Request Quotes</button>
+              <span class="text-sm text-slate-500">Selected ${selected.size} vendor(s)</span>
+            </div>
+            `}
+          </div>
+
+          <div class="rounded-2xl border border-slate-200 bg-white p-4">
+            <div class="text-sm font-medium text-slate-900 mb-2">Questionnaire</div>
+            <div class="text-xs text-slate-600 mb-2">These questions will be sent with your RFQ.</div>
+            <div id="q_list_${r.id}" class="flex flex-wrap gap-2 mb-3">
+              ${(r.questionnaires || []).map(q => `
+                <span class="inline-flex items-center gap-1 bg-slate-50 text-slate-800 border border-slate-200 px-2 py-1 rounded-full text-xs">${q}</span>
+              `).join('')}
+            </div>
+            <div class="text-xs text-slate-500">Note: Auto-filled with your mandatory 4 questions when you click "Request Quotes".</div>
+          </div>
+
+          <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div class="lg:col-span-2"></div>
+            <div class="space-y-4">
+              <div class="rounded-xl border border-slate-200 bg-white p-4">
+                <div class="text-sm font-medium text-slate-900 mb-2">Next</div>
+                <p class="text-sm text-slate-600">Once quotes arrive, go to Quotes to compare and shortlist.</p>
+                <div class="mt-2">
+                  <button onclick="setAdminStep('Quotes')" class="rounded-lg bg-white border border-slate-200 px-3 py-1.5 text-sm hover:bg-slate-50">Open Quotes</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderAdminEvidence(r) {
+      const entries = [];
+      (r.quotes || []).forEach(q => {
+        (q.evidence || []).forEach(f => {
+          const v = store.vendors.find(v=>v.id===q.vendorId);
+          entries.push({ vendor: v?.name || q.vendorId, name: f.name });
+        });
+      });
+      if (!entries.length) {
+        return `<div class="text-xs text-slate-500">No evidence uploaded yet.</div>`;
+      }
+      return entries.map(e => `
+        <div class="text-xs bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 flex items-center justify-between">
+          <span class="truncate pr-2">${e.name}</span>
+          <span class="text-slate-500">by ${e.vendor}</span>
+        </div>
+      `).join('');
+    }
+
+    function renderAdminQuotes(r) {
+      const quotes = r.quotes || [];
+      return `
+        <div class="space-y-4">
+          <div class="rounded-xl border border-slate-200 bg-white p-4">
+            <div class="flex items-center justify-between">
+              <div>
+                <div class="text-sm font-medium text-slate-900">Quotes</div>
+                <div class="text-xs text-slate-600">Compare, score, and shortlist vendors.</div>
+              </div>
+              <div class="flex items-center gap-2">
+                <button onclick="runScoring('${r.id}')" class="rounded-lg bg-accent-600 hover:bg-accent-700 text-white px-3 py-1.5 text-sm">Run AI Scoring</button>
+                <button onclick="shortlistTop('${r.id}')" class="rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 text-sm">Shortlist Top 3</button>
+              </div>
+            </div>
+            <div class="mt-4 overflow-x-auto hide-scrollbar">
+              <table class="min-w-full text-sm">
+                <thead>
+                  <tr class="text-left text-slate-600">
+                    <th class="py-2 pr-4">Vendor</th>
+                    <th class="py-2 pr-4">Amount</th>
+                    <th class="py-2 pr-4">Relevance</th>
+                    <th class="py-2 pr-4">Revenue</th>
+                    <th class="py-2 pr-4">Profile</th>
+                    <th class="py-2 pr-4">Score</th>
+                    <th class="py-2 pr-4">Select</th>
+                  </tr>
+                </thead>
+                <tbody class="align-top">
+                  ${quotes.length ? quotes.map(q => {
+                    const v = store.vendors.find(x => x.id === q.vendorId);
+                    const selectedClass = r.winnerVendorId === q.vendorId ? 'ring-2 ring-emerald-400' : '';
+                    return `
+                      <tr class="border-t border-slate-100 ${selectedClass}">
+                        <td class="py-2 pr-4">
+                          <div class="font-medium text-slate-900">${v?.name || q.vendorId}</div>
+                          <div class="text-xs text-slate-500">Items covered: ${q.itemsCovered || '—'}</div>
+                        </td>
+                        <td class="py-2 pr-4">${q.amount ? currency(q.amount) : '—'}</td>
+                        <td class="py-2 pr-4">${q.scores ? q.scores.relevance + '%' : '—'}</td>
+                        <td class="py-2 pr-4">${q.scores ? q.scores.revenue : '—'}</td>
+                        <td class="py-2 pr-4">${q.scores ? q.scores.profile : '—'}</td>
+                        <td class="py-2 pr-4 font-semibold">${q.scores ? q.scores.total : '—'}</td>
+                        <td class="py-2 pr-4">
+                          <button onclick="selectWinner('${r.id}','${q.vendorId}')" class="rounded-lg bg-white border border-slate-200 px-3 py-1.5 text-xs hover:bg-slate-50">Choose</button>
+                        </td>
+                      </tr>
+                    `;
+                  }).join('') : `
+                    <tr><td colspan="7" class="text-center text-slate-500 py-8">Waiting for vendor quotes...</td></tr>
+                  `}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="rounded-xl border border-slate-200 bg-white p-4">
+            <div class="text-sm font-medium text-slate-900 mb-2">Shortlist</div>
+            <div id="shortlist_${r.id}" class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              ${renderShortlist(r)}
+            </div>
+            <div class="mt-3">
+              <button onclick="setAdminStep('Contract')" class="rounded-lg bg-slate-900 text-white px-3 py-1.5 text-sm">Proceed to Contract</button>
+            </div>
+          </div>
+
+          <div class="rounded-xl border border-slate-200 bg-white p-4">
+            <div class="text-sm font-medium text-slate-900 mb-2">Vendor Q&A</div>
+            <div class="space-y-2">
+              ${renderVendorQnA(r)}
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderShortlist(r) {
+      const top = (r.quotes || []).filter(q => q.shortlisted);
+      if (!top.length) return `<div class="text-sm text-slate-500 col-span-full">No shortlisted vendors yet.</div>`;
+      return top.map(q => {
+        const v = store.vendors.find(x => x.id === q.vendorId);
+        return `
+          <div class="rounded-lg border border-slate-200 p-3">
+            <div class="flex items-center justify-between">
+              <div class="font-medium text-slate-900">${v?.name || q.vendorId}</div>
+              <div class="flex items-center gap-1">${renderStars(v?.rating || 0)}</div>
+            </div>
+            <div class="text-xs text-slate-500">Overall ⭐ ${v?.rating ?? '—'}</div>
+            ${v?.reviews?.length ? `<div class="text-xs text-slate-600 mt-1 line-clamp-2">"${lastFeedbackSnippet(v)}"</div>` : ''}
+            <div class="text-xs text-slate-500 mb-1">${currency(q.amount)} · Score ${q.scores?.total ?? '—'}</div>
+            <button onclick="selectWinner('${r.id}','${q.vendorId}')" class="rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 text-xs">Select as Winner</button>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function renderVendorQnA(r) {
+      const quotes = r.quotes || [];
+      if (!quotes.length) return `<div class="text-xs text-slate-500">No Q&A yet.</div>`;
+      const blocks = [];
+      quotes.forEach(q => {
+        const v = store.vendors.find(x => x.id === q.vendorId);
+        const answers = q.answers || {};
+        const list = (r.questionnaires || []).map(question => `
+          <div class="text-xs bg-slate-50 border border-slate-200 rounded-lg px-2 py-1">
+            <div class="text-slate-700">${question}</div>
+            <div class="text-slate-500 mt-0.5">${answers[question] ? answers[question] : '— No response yet'}</div>
+          </div>
+        `).join('');
+        blocks.push(`
+          <div class="rounded-xl border border-slate-200 p-3">
+            <div class="font-medium text-slate-900 mb-1">${v?.name || q.vendorId}</div>
+            <div class="space-y-1">${list}</div>
+          </div>
+        `);
+      });
+      return blocks.join('');
+    }
+
+    function renderAdminContract(r) {
+      const winner = store.vendors.find(v => v.id === r.winnerVendorId);
+      const selectedQuote = (r.quotes || []).find(q => q.vendorId === r.winnerVendorId);
+      return `
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div class="lg:col-span-2 space-y-4">
+            <div class="rounded-xl border border-slate-200 bg-white p-4">
+              <div class="text-sm font-medium text-slate-900">Contract Offering</div>
+              <form onsubmit="sendContract(event, '${r.id}')" class="space-y-3">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label class="block text-xs text-slate-600 mb-1">Vendor</label>
+                    <input type="text" value="${winner ? winner.name : ''}" disabled class="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
+                  </div>
+                  <div>
+                    <label class="block text-xs text-slate-600 mb-1">Contract Title</label>
+                    <input id="c_title_${r.id}" type="text" value="${(r.title || 'Event Audio Services') + ' — Contract'}" class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:ring-2 focus:ring-brand-400 outline-none">
+                  </div>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div>
+                    <label class="block text-xs text-slate-600 mb-1">Start Date</label>
+                    <input id="c_start_${r.id}" type="date" class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:ring-2 focus:ring-brand-400 outline-none">
+                  </div>
+                  <div>
+                    <label class="block text-xs text-slate-600 mb-1">Amount</label>
+                    <input id="c_amount_${r.id}" type="number" value="${selectedQuote?.amount || ''}" placeholder="e.g. 5000" class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:ring-2 focus:ring-brand-400 outline-none">
+                  </div>
+                  <div>
+                    <label class="block text-xs text-slate-600 mb-1">Payment Terms</label>
+                    <input id="c_terms_${r.id}" type="text" value="50% advance, 50% on delivery" class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:ring-2 focus:ring-brand-400 outline-none">
+                  </div>
+                </div>
+                <div>
+                  <label class="block text-xs text-slate-600 mb-1">Scope</label>
+                  <textarea id="c_scope_${r.id}" rows="4" class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:ring-2 focus:ring-brand-400 outline-none" placeholder="Describe services...">${(r.items || []).map(i => `• ${i}`).join('\n')}</textarea>
+                </div>
+                <div class="flex items-center gap-2">
+                  <button class="rounded-xl bg-pink-600 hover:bg-pink-700 text-white px-4 py-2.5">Send Contract</button>
+                  <button type="button" onclick="previewContract('${r.id}')" class="rounded-xl bg-white border border-slate-200 px-4 py-2.5">Preview</button>
+                  <button type="button" onclick="markServiceDelivered('${r.id}')" class="rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5">Mark Delivered</button>
+                </div>
+              </form>
+            </div>
+            <div id="contract_preview_${r.id}" class="hidden rounded-xl border border-slate-200 bg-white p-4">
+              <div class="text-sm font-medium text-slate-900 mb-2">Contract Preview</div>
+              <div class="prose-sm text-slate-800 whitespace-pre-wrap"></div>
+            </div>
+          </div>
+          <div class="space-y-4">
+            <div class="rounded-xl border border-slate-200 bg-white p-4">
+              <div class="text-sm font-medium text-slate-900 mb-2">Selection</div>
+              <div>${winner ? `${badge('Winner','emerald')} <span class="text-sm ml-1">${winner.name}</span>` : `<span class="text-sm text-slate-500">No vendor selected.</span>`}</div>
+              <div class="mt-2">
+                <button onclick="setAdminStep('Quotes')" class="rounded-lg bg-white border border-slate-200 px-3 py-1.5 text-sm hover:bg-slate-50">Change selection</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    // ----------------------------
+    // Vendor Role View
+    // ----------------------------
+    function renderVendor() {
+      const vendorId = store.vendorPortal.activeVendorId;
+      const me = store.vendors.find(v => v.id === vendorId);
+      const invitations = store.requests.filter(r => (r.vendorsSelected || []).includes(vendorId));
+
+      return `
+        <section class="space-y-6">
+          <div class="bg-white/80 backdrop-blur rounded-2xl border border-white shadow-soft p-5">
+            <div class="flex items-center justify-between mb-3">
+              <div>
+                <div class="text-xs uppercase tracking-wider text-slate-500">Vendor Portal</div>
+                <div class="text-lg font-semibold text-slate-900">Welcome, ${me?.name}</div>
+              </div>
+              <div class="flex items-center gap-2">
+                <label class="text-xs text-slate-600">Impersonate:</label>
+                <select onchange="switchVendor(this.value)" class="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm focus:ring-2 focus:ring-brand-400 outline-none">
+                  ${store.vendors.map(v => `<option value="${v.id}" ${v.id===vendorId?'selected':''}>${v.name}</option>`).join('')}
+                </select>
+              </div>
+            </div>
+            <div class="text-sm text-slate-600">Submit quotes, answer questionnaires, and upload evidence.</div>
+          </div>
+
+          <div class="bg-white/80 backdrop-blur rounded-2xl border border-white shadow-soft p-5">
+            <div class="flex items-center justify-between mb-3">
+              <h3 class="font-semibold text-slate-900">RFQ Invitations</h3>
+              <span class="text-xs text-slate-500">${invitations.length} open</span>
+            </div>
+            <div class="space-y-3">
+              ${invitations.length ? invitations.map(r => renderVendorInvitation(r, vendorId)).join('') : `
+                <div class="text-center text-slate-500 py-8">No invitations yet.</div>
+              `}
+            </div>
+          </div>
+        </section>
+      `;
+    }
+
+    function renderVendorInvitation(r, vendorId) {
+      const myQuote = (r.quotes || []).find(q => q.vendorId === vendorId);
+      const submitted = !!myQuote?.submittedAt;
+      return `
+        <div class="rounded-xl border border-slate-200 bg-white p-4">
+          <div class="flex items-center justify-between">
+            <div class="font-medium text-slate-900">${r.title || 'Requirement'}</div>
+            ${statusBadge(r.status)}
+          </div>
+          <div class="text-sm text-slate-600 mt-1 line-clamp-2">${r.text}</div>
+          <div class="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3">
+            <form onsubmit="submitQuote(event,'${r.id}','${vendorId}')" class="rounded-lg border border-slate-200 p-3 space-y-2">
+              <div class="text-xs font-medium text-slate-700">Submit Quote</div>
+              <div>
+                <label class="block text-xs text-slate-600 mb-1">Amount</label>
+                <input type="number" id="q_amount_${r.id}_${vendorId}" ${submitted?'disabled':''} placeholder="e.g. 5000" class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:ring-2 focus:ring-brand-400 outline-none">
+              </div>
+              <div>
+                <label class="block text-xs text-slate-600 mb-1">Items covered</label>
+                <input type="number" id="q_items_${r.id}_${vendorId}" ${submitted?'disabled':''} placeholder="How many of the requested items?" class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:ring-2 focus:ring-brand-400 outline-none">
+              </div>
+              <div>
+                <label class="block text-xs text-slate-600 mb-1">Upload evidence</label>
+                <input type="file" id="q_files_${r.id}_${vendorId}" ${submitted?'disabled':''} multiple class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:ring-2 focus:ring-brand-400 outline-none">
+              </div>
+              <button class="w-full rounded-lg ${submitted?'bg-slate-300':'bg-emerald-600 hover:bg-emerald-700'} text-white px-3 py-2 text-sm">${submitted?'Submitted':'Submit Quote'}</button>
+            </form>
+
+            <div class="rounded-lg border border-slate-200 p-3 space-y-2 md:col-span-2">
+              <div class="text-xs font-medium text-slate-700">Questionnaire</div>
+              ${(r.questionnaires || []).map(q => `
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-2 items-center">
+                  <div class="text-xs text-slate-600">${q}</div>
+                  <input type="text" id="ans_${r.id}_${vendorId}_${hashKey(q)}" ${submitted?'disabled':''} placeholder="Your answer..." class="md:col-span-2 rounded-lg border border-slate-200 px-3 py-2 text-sm focus:ring-2 focus:ring-brand-400 outline-none">
+                </div>
+              `).join('')}
+              <div class="flex justify-end">
+                <button onclick="submitAnswers('${r.id}','${vendorId}')" class="rounded-lg ${submitted?'bg-slate-300':'bg-accent-600 hover:bg-accent-700'} text-white px-3 py-1.5 text-sm">${submitted?'Answers Locked':'Submit Answers'}</button>
+              </div>
+              ${submitted ? `<div class="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-2 py-1 inline-block">Submission confirmed</div>` : ''}
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function hashKey(s) {
+      return btoa(unescape(encodeURIComponent(s))).replace(/=+$/,'').slice(0,10);
+    }
+
+    // ----------------------------
+    // Actions (Admin)
+    // ----------------------------
+    function validateRequirement(id) {
+      const r = store.requests.find(x => x.id === id);
+      if (!r) return;
+      r.suggestions = aiSuggestItems(r.text);
+      r.status = 'InReview';
+      toast('Suggestions generated.');
+      render();
+    }
+
+    function addItem(id, text) {
+      const r = store.requests.find(x => x.id === id);
+      if (!r) return;
+      r.items = r.items || [];
+      if (!r.items.includes(text)) r.items.push(text);
+      render();
+    }
+
+    function removeItem(id, text) {
+      const r = store.requests.find(x => x.id === id);
+      if (!r) return;
+      r.items = (r.items || []).filter(i => i !== text);
+      render();
+    }
+
+    function addCustomItem(id) {
+      const input = document.getElementById(`add_${id}`);
+      const value = (input.value || '').trim();
+      if (!value) return;
+      addItem(id, value);
+      input.value = '';
+    }
+
+    function quickSelect(id, arr) {
+      arr.forEach(v => addItem(id, v));
+    }
+
+    function sendToUserConfirmation(id) {
+      const r = store.requests.find(x => x.id === id);
+      if (!r) return;
+      if (!r.items || !r.items.length) return toast('Add at least one item before sending.');
+      r.status = 'SentForUserConfirmation';
+      toast('Final list sent to user for approval.');
+      render();
+    }
+
+    function reuseTemplate(tid) {
+      const t = store.requests.find(x => x.id === tid);
+      if (!t) return;
+      const id = uid('req');
+      store.requests.push({
+        id, createdAt: Date.now(),
+        title: `${t.title} (Reused)`,
+        text: t.text,
+        files: [],
+        items: [...(t.items || [])],
+        suggestions: [],
+        status: 'InReview',
+        questionnaires: [...(t.questionnaires || [])],
+        vendorsSelected: [],
+        quotes: [],
+        vendorSearchDone: false,
+        filterTag: null
+      });
+      store.admin.currentRequestId = id;
+      store.admin.currentStep = 'Validate';
+      toast('Template reused into a new request.');
+      render();
+    }
+
+    function createBlankRequest() {
+      const id = uid('req');
+      store.requests.push({
+        id, createdAt: Date.now(),
+        title: 'Blank Request',
+        text: 'Describe the requirement...',
+        files: [],
+        items: [],
+        suggestions: [],
+        status: 'Submitted',
+        questionnaires: ['Confirm availability date', 'Warranty/Support details', 'Delivery/Setup time'],
+        vendorsSelected: [],
+        quotes: [],
+        vendorSearchDone: false,
+        filterTag: null
+      });
+      selectAdminRequest(id);
+    }
+
+    function jumpToQuotes() {
+      store.admin.currentStep = 'Quotes';
+      render();
+    }
+
+    function searchVendors(rid) {
+      const r = store.requests.find(x => x.id === rid);
+      if (!r) return;
+      const tags = extractTagsFromRequest(r);
+      const matches = store.vendors.filter(v => tags.length ? v.tags.some(t => tags.includes(t)) : true);
+      r.filteredVendors = matches;
+      r.vendorSearchDone = true;
+      r.filterTag = null;
+      toast(`Found ${matches.length} vendor(s).`);
+      render();
+    }
+
+    function filterVendors(rid, tag) {
+      const r = store.requests.find(x => x.id === rid);
+      if (!r) return;
+      r.filterTag = tag;
+      render();
+    }
+
+    function clearVendorFilter(rid) {
+      const r = store.requests.find(x => x.id === rid);
+      if (!r) return;
+      r.filterTag = null;
+      render();
+    }
+
+    function toggleVendorSelect(rid, vid, checked) {
+      const r = store.requests.find(x => x.id === rid);
+      if (!r) return;
+      r.vendorsSelected = r.vendorsSelected || [];
+      const set = new Set(r.vendorsSelected);
+      if (checked) set.add(vid); else set.delete(vid);
+      r.vendorsSelected = [...set];
+      render();
+    }
+
+    function sendRFQ(rid) {
+      const r = store.requests.find(x => x.id === rid);
+      if (!r) return;
+      if (!(r.vendorsSelected || []).length) return toast('Select vendors first.');
+
+      // Use exactly the four required questions
+      r.questionnaires = [
+        'Can you provide us with a detailed company profile, including your founding date, ownership structure, and key leadership biographies?',
+        'What is your financial standing? Are you profitable, and can you provide audited financial statements or credit reports for the last two years?',
+        'What are your security protocols and data protection measures?',
+        'What does your customer support model look like'
+      ];
+
+      r.status = 'RFQSent';
+      r.quotes = r.quotes || [];
+      r.vendorsSelected.forEach(vid => {
+        if (!r.quotes.find(q => q.vendorId === vid)) {
+          r.quotes.push({ id: uid('quote'), vendorId: vid, amount: null, itemsCovered: null, answers: {}, evidence: [] });
+        }
+      });
+      toast('RFQ sent with your 4 questions. Vendors will submit quotes in their portal.');
+      render();
+    }
+
+    function sendQuestionnaire(rid) {
+      const r = store.requests.find(x => x.id === rid);
+      if (!r || !(r.vendorsSelected || []).length) return toast('Select vendors first.');
+      toast('Questionnaire sent to selected vendors.');
+    }
+
+    function runScoring(rid) {
+      const r = store.requests.find(x => x.id === rid);
+      if (!r) return;
+      computeQuoteScores(r);
+      r.status = (r.quotes || []).some(q => q.amount) ? 'QuotesReceived' : r.status;
+      toast('AI scoring complete.');
+      render();
+    }
+
+    function shortlistTop(rid) {
+      const r = store.requests.find(x => x.id === rid);
+      if (!r) return;
+      computeQuoteScores(r);
+      (r.quotes || []).forEach((q, i) => q.shortlisted = i < 3);
+      r.status = 'Shortlisted';
+      toast('Top 3 vendors shortlisted.');
+      render();
+    }
+
+    function selectWinner(rid, vid) {
+      const r = store.requests.find(x => x.id === rid);
+      if (!r) return;
+      r.winnerVendorId = vid;
+      toast('Winner selected. Proceed to contract.');
+      render();
+    }
+
+    function previewContract(rid) {
+      const title = document.getElementById(`c_title_${rid}`).value;
+      const start = document.getElementById(`c_start_${rid}`).value || 'TBD';
+      const amount = document.getElementById(`c_amount_${rid}`).value || 'TBD';
+      const terms = document.getElementById(`c_terms_${rid}`).value;
+      const scope = document.getElementById(`c_scope_${rid}`).value;
+
+      const wrap = document.getElementById(`contract_preview_${rid}`);
+      wrap.classList.remove('hidden');
+      const body = wrap.querySelector('.prose-sm');
+      body.textContent = `${title}\n\nStart: ${start}\nAmount: ${amount}\nTerms: ${terms}\n\nScope:\n${scope}`;
+      toast('Contract preview updated.');
+    }
+
+    function sendContract(e, rid) {
+      e.preventDefault();
+      const r = store.requests.find(x => x.id === rid);
+      if (!r) return;
+      if (!r.winnerVendorId) return toast('Select a winning vendor first.');
+      r.status = 'ContractSent';
+      toast('Contract sent to vendor (demo).');
+      render();
+    }
+
+    function markServiceDelivered(rid) {
+      const r = store.requests.find(x => x.id === rid);
+      if (!r) return;
+      r.status = 'Closed';
+      toast('Service marked as delivered. User can now provide feedback.');
+      render();
+    }
+
+    // ----------------------------
+    // Actions (Vendor)
+    // ----------------------------
+    function switchVendor(id) {
+      store.vendorPortal.activeVendorId = id;
+      render();
+    }
+
+    function submitQuote(e, rid, vid) {
+      e.preventDefault();
+      const amount = parseFloat(document.getElementById(`q_amount_${rid}_${vid}`).value || '0');
+      const items = parseInt(document.getElementById(`q_items_${rid}_${vid}`).value || '0');
+      const files = Array.from(document.getElementById(`q_files_${rid}_${vid}`).files || []).map(f => ({ name: f.name, size: f.size }));
+      const r = store.requests.find(x => x.id === rid);
+      if (!r) return;
+      const q = (r.quotes || []).find(x => x.vendorId === vid);
+      if (!q) return;
+      q.amount = isNaN(amount) ? null : amount;
+      q.itemsCovered = isNaN(items) ? null : items;
+      q.evidence = files;
+      q.submittedAt = Date.now();
+      toast('Quote submitted.');
+      render();
+    }
+
+    function submitAnswers(rid, vid) {
+      const r = store.requests.find(x => x.id === rid);
+      if (!r) return;
+      const q = (r.quotes || []).find(x => x.vendorId === vid);
+      if (!q) return;
+      const answers = {};
+      (r.questionnaires || []).forEach(question => {
+        const el = document.getElementById(`ans_${r.id}_${vid}_${hashKey(question)}`);
+        if (el) answers[question] = el.value;
+      });
+      q.answers = answers;
+      toast('Answers submitted.');
+      render();
+    }
+
+    // ----------------------------
+    // Feedback Modal Logic
+    // ----------------------------
+    function openFeedback(requestId) {
+      store.feedbackDraft = { requestId, rating: 0 };
+      document.getElementById('feedbackComment').value = '';
+      const modal = document.getElementById('feedbackModal');
+      modal.classList.remove('hidden');
+      setupStarButtons();
+    }
+
+    function closeFeedback() {
+      document.getElementById('feedbackModal').classList.add('hidden');
+    }
+
+    function setupStarButtons() {
+      const stars = document.querySelectorAll('.star-btn');
+      stars.forEach(btn => {
+        btn.classList.remove('text-amber-500');
+        btn.textContent = '☆';
+        btn.onclick = () => {
+          const val = parseInt(btn.getAttribute('data-star'));
+          store.feedbackDraft.rating = val;
+          stars.forEach(s => {
+            const sVal = parseInt(s.getAttribute('data-star'));
+            if (sVal <= val) { s.textContent = '★'; s.classList.add('text-amber-500'); }
+            else { s.textContent = '☆'; s.classList.remove('text-amber-500'); }
+          });
+        };
+      });
+    }
+
+    function submitFeedback(e) {
+      e.preventDefault();
+      const { requestId, rating } = store.feedbackDraft || {};
+      if (!requestId || !rating) { toast('Please select a rating.'); return; }
+      const comment = document.getElementById('feedbackComment').value.trim();
+      const r = store.requests.find(x => x.id === requestId);
+      if (!r) return;
+      r.feedback = { rating, comment, date: Date.now() };
+
+      // Update vendor aggregate rating
+      if (r.winnerVendorId) {
+        const v = store.vendors.find(v => v.id === r.winnerVendorId);
+        if (v) {
+          v.reviews = v.reviews || [];
+          v.reviews.push({ rating, comment, requestId });
+          recomputeVendorRating(v);
+        }
+      }
+
+      closeFeedback();
+      toast('Thanks for your feedback!');
+      render();
+    }
+
+    // ----------------------------
+    // Role Tabs + Rendering
+    // ----------------------------
+    function renderRoleTabs() {
+      const tabs = document.getElementById('roleTabs');
+      const roles = ['User','Admin','Vendor'];
+      tabs.innerHTML = roles.map(r => `
+        <button onclick="setRole('${r}')" class="px-3 py-1.5 rounded-full text-sm font-medium border transition ${store.role===r ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'}">${r}</button>
+      `).join('');
+    }
+
+    function render() {
+      renderRoleTabs();
+      const app = document.getElementById('app');
+      app.innerHTML = {
+        'User': renderUser(),
+        'Admin': renderAdmin(),
+        'Vendor': renderVendor(),
+      }[store.role];
+    }
+
+    // ----------------------------
+    // Simple toast
+    // ----------------------------
+    let toastTimer = null;
+    function toast(message) {
+      let el = document.getElementById('toast');
+      if (!el) {
+        el = document.createElement('div');
+        el.id = 'toast';
+        el.className = 'fixed bottom-5 left-1/2 -translate-x-1/2 z-50';
+        document.body.appendChild(el);
+      }
+      el.innerHTML = `
+        <div class="rounded-full bg-slate-900 text-white px-4 py-2 text-sm shadow-lg border border-white/10">${message}</div>
+      `;
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => { el.innerHTML = '' }, 2200);
+    }
+
+    // ----------------------------
+    // Init
+    // ----------------------------
+    render();
+    // CHATBOT
+    function toggleChat(open) {
+      const panel = document.getElementById('chatPanel');
+      panel.classList.toggle('chat-open', open);
+      panel.classList.toggle('chat-closed', !open);
+    }
+    function handleChat() {
+      const input = document.getElementById('chatInput');
+      const text = input.value.trim();
+      if (!text) return;
+      addChat('user', text);
+      input.value = '';
+      setTimeout(()=>{
+        respondChat(text);
+      }, 400);
+    }
+    function addChat(role, text, html=false) {
+      const body = document.getElementById('chatBody');
+      const bubble = document.createElement('div');
+      bubble.className = `max-w-[90%] ${role==='user'?'ml-auto':''}`;
+      bubble.innerHTML = `
+        <div class="inline-block px-3 py-2 rounded-lg ${role==='user'?'bg-primary-600 text-white':'bg-steel-100 dark:bg-steel-700'} text-sm">${html? text : escapeHtml(text)}</div>
+      `;
+      body.appendChild(bubble);
+      body.scrollTop = body.scrollHeight;
+    }
+    function respondChat(q) {
+      const lower = q.toLowerCase();
+      if (lower.includes('top') && lower.includes('violation')) {
+        const data = [
+          { name:'3-way match missing', count:42 },
+          { name:'Round-dollar > $50k', count:31 },
+          { name:'Skipped approval', count:27 },
+          { name:'Duplicate vendor', count:19 },
+          { name:'SoD conflict', count:15 },
+        ];
+        const bars = data.map(d=>`
+          <div class="flex items-center gap-2">
+            <div class="w-40 text-xs">${d.name}</div>
+            <div class="flex-1 h-2 bg-steel-200 dark:bg-steel-700 rounded">
+              <div class="h-2 bg-primary-600 rounded" style="width:${Math.min(100, d.count)}%"></div>
+            </div>
+            <div class="w-8 text-right text-xs">${d.count}</div>
+          </div>
+        `).join('');
+        addChat('bot', `
+          <div class="space-y-2">
+            <div class="font-semibold">Top 5 compliance violations — Q2</div>
+            ${bars}
+            <div class="text-xs text-steel-500">Source: Finance Auditor & Process Miner</div>
+          </div>
+        `, true);
+      } else if (lower.includes('esg') || lower.includes('environment')) {
+        addChat('bot', `
+          <div>
+            ESG risk index currently at <span class="font-semibold">0.32</span> (Low). Main drivers: supplier disclosure lag and emission factor updates.
+          </div>
+        `, true);
+      } else {
+        addChat('bot', `
+          <div>Here’s a summary I can help with: run an instant audit, explain a finding, or generate a report preview. Try asking: “Explain TX-1003” or “Generate remediation summary”.</div>
+        `, true);
+      }
+    }
+    function escapeHtml(s) { return s.replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;' }[m])); }
+
+    // MODAL
+    function openModal(title, bodyHtml, footerHtml) {
+      document.getElementById('modalTitle').innerHTML = title;
+      document.getElementById('modalBody').innerHTML = bodyHtml;
+      //document.getElementById('modalFooter').innerHTML = footerHtml || '';
+      document.getElementById('modal').classList.remove('hidden');
+    }
+    function closeModal() { document.getElementById('modal').classList.add('hidden'); }
+
+    // Toast (simple)
+    function toast(msg) {
+      const t = document.createElement('div');
+      t.className = 'fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] px-4 py-2 rounded-lg bg-steel-900 text-white shadow-card';
+      t.textContent = msg;
+      document.body.appendChild(t);
+      setTimeout(()=> t.remove(), 1800);
+    }
+    /*
+    // Quick actions
+    function runAuditFlow() {
+      openModal('Instant Audit', `
+        <div class="space-y-3">
+          <div class="text-sm text-steel-600 dark:text-steel-300">Running AI checks across Finance, IT, and Compliance...</div>
+          <div class="h-2 rounded-full bg-steel-100 dark:bg-steel-700 overflow-hidden">
+            <div id="auditBar" class="h-2 bg-primary-600 rounded" style="width:0%"></div>
+          </div>
+          <div id="auditStatus" class="text-sm">Starting...</div>
+        </div>
+      `);
+      let pct = 0;
+      const step = ()=>{
+        pct += Math.random()*22;
+        if (pct >= 100) {
+          pct = 100;
+          document.getElementById('auditBar').style.width = pct + '%';
+          document.getElementById('auditStatus').textContent = 'Completed. 12 findings detected (3 critical).';
+          document.getElementById('modalFooter').innerHTML = `
+            <button class="px-4 py-2.5 rounded-lg border border-steel-200 dark:border-steel-700" onclick="closeModal()">Close</button>
+            <button class="px-4 py-2.5 rounded-lg bg-primary-600 text-white" onclick="navigate('explore'); closeModal()">View findings</button>
+          `;
+        } else {
+          document.getElementById('auditBar').style.width = pct + '%';
+          document.getElementById('auditStatus').textContent = pct<40?'Analyzing transactions...': pct<75?'Mining processes...':'Cross-checking compliance...';
+          setTimeout(step, 500);
+        }
+      };
+      setTimeout(step, 500);
+    }
+    function openReportWizard() {
+      openModal('Generate Report', `
+        <form id="reportForm" class="space-y-3" onsubmit="event.preventDefault(); generateReport();">
+          <label class="block">
+            <div class="text-sm mb-1">Audience</div>
+            <select id="repAudience" class="w-full px-3 py-2 rounded-lg border border-steel-200 dark:border-steel-700 bg-white dark:bg-steel-900">
+              <option>Executive</option><option>Audit Committee</option><option>Operational</option>
+            </select>
+          </label>
+          <label class="block">
+            <div class="text-sm mb-1">Scope</div>
+            <select id="repScope" class="w-full px-3 py-2 rounded-lg border border-steel-200 dark:border-steel-700 bg-white dark:bg-steel-900">
+              <option>Quarter-to-date</option><option>Month-to-date</option><option>Custom</option>
+            </select>
+          </label>
+          <label class="block">
+            <div class="text-sm mb-1">Include</div>
+            <div class="grid grid-cols-2 gap-2 text-sm">
+              ${['Findings','Heatmaps','Compliance','Remediation','ESG'].map(x=>`
+                <label class="inline-flex items-center gap-2 p-2 rounded-lg border border-steel-200 dark:border-steel-700">
+                  <input type="checkbox" class="accent-primary-600" checked> ${x}
+                </label>
+              `).join('')}
+            </div>
+          </label>
+          <button class="px-4 py-2.5 rounded-lg bg-primary-600 text-white">Generate</button>
+        </form>
+      `, `<button class="px-4 py-2.5 rounded-lg border border-steel-200 dark:border-steel-700" onclick="closeModal()">Cancel</button>`);
+    }
+        */
+    // PROCESS LAYERS
+    function toggleProcessLayers() {
+      const a = document.getElementById('toggleAsIs').checked;
+      const d = document.getElementById('toggleAsDesigned').checked;
+      document.getElementById('flowAsIs').style.display = a ? 'block' : 'none';
+      document.getElementById('flowDesigned').style.display = d ? 'block' : 'none';
+    }
+
+    // Alerts dropdown click-away
+    document.addEventListener('click', (e)=>{
+      const m = document.getElementById('notifMenu');
+      const b = document.getElementById('bellBtn');
+      if (!m.contains(e.target) && !b.contains(e.target)) m.classList.add('hidden');
+    });
+
+    // Build remaining sections on nav load
+    function renderReportsOnce() { renderRemediation(); }
+    renderReportsOnce();
+
+    // Page renders
+    function renderAlertsOnce() { renderAlerts(); }
+    renderAlertsOnce();
+
+    // Helpers: icons
+    function iconGrid(){ return `<svg class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor"><path d="M3 3h8v8H3V3Zm10 0h8v8h-8V3ZM3 13h8v8H3v-8Zm10 0h8v8h-8v-8Z"/></svg>`; }
+    function iconBots(){ return `<svg class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a1 1 0 0 1 1 1v1h4a2 2 0 0 1 2 2v6a4 4 0 0 1-4 4h-2v3h3v2H8v-2h3v-3H9a4 4 0 0 1-4-4V6a2 2 0 0 1 2-2h4V3a1 1 0 0 1 1-1Z"/></svg>`; }
+    function iconSearch(){ return `<svg class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor"><path d="M11 4a7 7 0 1 1 0 14 7 7 0 0 1 0-14Zm6.32 12.9 3.39 3.39-1.42 1.42-3.39-3.39"/></svg>`; }
+    function iconShield(){ return `<svg class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2 4 5v6c0 5 3.4 9.7 8 11 4.6-1.3 8-6 8-11V5l-8-3Z"/></svg>`; }
+    function iconDoc(){ return `<svg class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12V8l-4-6Z"/></svg>`; }
+    function iconBell(){ return `<svg class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor"><path d="M12 22a2 2 0 0 0 2-2h-4a2 2 0 0 0 2 2Zm6-6V11a6 6 0 0 0-12 0v5l-2 2v1h16v-1l-2-2Z"/></svg>`; }
+    function iconUsers(){ 
+    return `<svg class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M16 11c1.66 0 3-1.34 3-3s-1.34-3-3-3-3 
+    1.34-3 3 1.34 3 3 3Zm-8 0c1.66 0 3-1.34 
+    3-3S9.66 5 8 5 5 6.34 5 8s1.34 3 3 
+    3Zm0 2c-2.67 0-8 1.34-8 4v2h10v-2c0-2.66-5.33-4-8-4Zm8 
+    0c-.29 0-.62.02-.97.05A5.978 5.978 0 0 1 20 
+    17v2h4v-2c0-2.66-5.33-4-8-4Z"/>
+  </svg>`;
+}
+
+  </script>
+<style>
+/* Add animation styles */
+@keyframes slide-in {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slide-out {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+}
+
+.animate-slide-in {
+  animation: slide-in 0.3s ease-out;
+}
+
+.animate-slide-out {
+  animation: slide-out 0.3s ease-in;
+}
+
+/* Chat Widget Styles */
+#aiChatWidget {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  width: 400px;
+  height: 600px;
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+  display: none;
+  flex-direction: column;
+  z-index: 10000;
+  overflow: hidden;
+  animation: slideIn 0.3s ease-out;
+}
+
+#aiChatWidget.active {
+  display: flex;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* Chat Header */
+.chat-header {
+  background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+  color: white;
+  padding: 16px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.chat-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.chat-close-btn {
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  color: white;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  transition: background 0.2s;
+}
+
+.chat-close-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* Chat Messages Area */
+.chat-messages {
+  flex: 1;
+  padding: 20px;
+  overflow-y: auto;
+  background: #f8fafc;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.chat-messages::-webkit-scrollbar {
+  width: 6px;
+}
+
+.chat-messages::-webkit-scrollbar-track {
+  background: #e2e8f0;
+}
+
+.chat-messages::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+
+/* Message Bubbles */
+.message {
+  display: flex;
+  gap: 10px;
+  animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.message.user {
+  flex-direction: row-reverse;
+}
+
+.message-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.message.user .message-avatar {
+  background: #2563eb;
+  color: white;
+}
+
+.message.assistant .message-avatar {
+  background: #10b981;
+  color: white;
+}
+
+.message-content {
+  background: white;
+  padding: 12px 16px;
+  border-radius: 12px;
+  max-width: 75%;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  font-size: 14px;
+  line-height: 1.5;
+  color: #334155;
+  word-wrap: break-word;
+}
+
+.message.user .message-content {
+  background: #2563eb;
+  color: white;
+  border-bottom-right-radius: 4px;
+}
+
+.message.assistant .message-content {
+  border-bottom-left-radius: 4px;
+}
+
+/* Typing Indicator */
+.typing-indicator {
+  display: none;
+  align-items: center;
+  gap: 4px;
+  padding: 12px 16px;
+  background: white;
+  border-radius: 12px;
+  width: fit-content;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.typing-indicator.active {
+  display: flex;
+}
+
+.typing-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #cbd5e1;
+  animation: typing 1.4s infinite;
+}
+
+.typing-dot:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.typing-dot:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes typing {
+  0%, 60%, 100% {
+    transform: translateY(0);
+  }
+  30% {
+    transform: translateY(-10px);
+  }
+}
+
+/* Chat Input Area */
+.chat-input-area {
+  padding: 16px 20px;
+  background: white;
+  border-top: 1px solid #e2e8f0;
+  display: flex;
+  gap: 10px;
+}
+
+.chat-input {
+  flex: 1;
+  padding: 10px 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.chat-input:focus {
+  border-color: #2563eb;
+}
+
+.chat-send-btn {
+  padding: 10px 20px;
+  background: #2563eb;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background 0.2s;
+}
+
+.chat-send-btn:hover:not(:disabled) {
+  background: #1e40af;
+}
+
+.chat-send-btn:disabled {
+  background: #cbd5e1;
+  cursor: not-allowed;
+}
+
+/* Welcome Message */
+.welcome-message {
+  text-align: center;
+  color: #64748b;
+  font-size: 14px;
+  padding: 20px;
+}
+
+.welcome-message strong {
+  display: block;
+  color: #1e293b;
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+</style>
+</html>
