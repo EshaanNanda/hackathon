@@ -19,6 +19,21 @@ from models.schemas import (
     Anomaly,
     AnomalyDetail
 )
+# Add these imports at the top
+# NEW (corrected) - USE THIS
+from services.risk_compliance_service import (
+    get_all_risk_data,
+    get_vendor_risk,
+    get_department_risk,
+    get_compliance_frameworks,
+    get_risk_clusters,
+    get_risk_highlights,
+    get_vendor_anomalies,
+    get_department_anomalies,
+    get_cluster_anomalies,
+    calculate_and_update_all_risks  # ✅ This is the main function for updates
+)
+from services.risk_compliance_service import calculate_and_update_all_risks
 
 router = APIRouter(prefix="/api/audit", tags=["Audit"])
 
@@ -186,4 +201,109 @@ async def get_flows():
         return {"flows": flows}
     except Exception as e:
         print(f"Error getting process flows: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ============================================
+# RISK & COMPLIANCE ENDPOINTS
+# ============================================
+
+@router.get("/risk-compliance/all")
+async def get_risk_compliance_dashboard():
+    """
+    Get all risk & compliance data for dashboard
+    Returns vendor risk, department risk, compliance frameworks, clusters, and highlights
+    """
+    try:
+        data = await get_all_risk_data()
+        return data
+    except Exception as e:
+        print(f"Error getting risk compliance data: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/risk-compliance/vendors")
+async def get_vendors():
+    """Get vendor risk data"""
+    try:
+        vendors = await get_vendor_risk()
+        return {"vendors": vendors}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/risk-compliance/departments")
+async def get_departments():
+    """Get department risk data"""
+    try:
+        departments = await get_department_risk()
+        return {"departments": departments}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/risk-compliance/compliance")
+async def get_compliance():
+    """Get compliance framework data"""
+    try:
+        frameworks = await get_compliance_frameworks()
+        return {"frameworks": frameworks}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/risk-compliance/clusters")
+async def get_clusters():
+    """Get risk cluster data"""
+    try:
+        clusters = await get_risk_clusters()
+        return {"clusters": clusters}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/risk-compliance/highlights")
+async def get_highlights():
+    """Get active risk highlights"""
+    try:
+        highlights = await get_risk_highlights()
+        return {"highlights": highlights}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/risk-compliance/vendor/{vendor_code}/anomalies")
+async def get_vendor_detail(vendor_code: str):
+    """Get anomalies for a specific vendor"""
+    try:
+        anomalies = await get_vendor_anomalies(vendor_code)
+        return {"vendor_code": vendor_code, "anomalies": anomalies}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/risk-compliance/department/{department_code}/anomalies")
+async def get_department_detail(department_code: str):
+    """Get anomalies for a specific department"""
+    try:
+        anomalies = await get_department_anomalies(department_code)
+        return {"department_code": department_code, "anomalies": anomalies}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/risk-compliance/cluster/{cluster_id}")
+async def get_cluster_detail(cluster_id: int):
+    """Get details of a specific risk cluster"""
+    try:
+        data = await get_cluster_anomalies(cluster_id)
+        return data
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+    
+# Add this new endpoint
+@router.post("/risk-compliance/calculate")
+async def calculate_risks():
+    """
+    Calculate and update all risk scores dynamically
+    Call this after agents run or anomalies are generated
+    """
+    try:
+        result = await calculate_and_update_all_risks()
+        return result
+    except Exception as e:
+        print(f"Error calculating risks: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))

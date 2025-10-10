@@ -13,11 +13,18 @@ from services.finance_auditor_agent import run_finance_agent
 from services.process_miner_agent import run_process_agent
 from services.it_auditor_agent import run_it_agent
 from services.compliance_checker_agent import run_compliance_agent
+from services.risk_compliance_service import calculate_and_update_all_risks
 
+
+
+# Add this import at the top
+from services.risk_compliance_service import calculate_and_update_all_risks
+
+# Update the function
 async def generate_anomalies_from_agents():
     """
     Trigger all agents to scan and generate anomalies
-    This calls each agent's scan function
+    Then auto-update risk & compliance dashboard
     """
     try:
         print("Starting agent scans to generate anomalies...")
@@ -33,17 +40,24 @@ async def generate_anomalies_from_agents():
         
         print(f"Agent scan results: {results}")
         
-        # Extract findings from agent results and convert to anomalies
+        # Convert findings to anomalies
         anomalies = await convert_agent_results_to_anomalies(results)
+        
+        # ✨ NEW: Auto-calculate risk scores after anomalies are generated
+        print("Calculating risk scores...")
+        await calculate_and_update_all_risks()
+        print("✓ Risk scores updated")
         
         return {
             "status": "success",
             "anomalies_generated": len(anomalies),
-            "agent_results": results
+            "agent_results": results,
+            "risk_updated": True  # Indicate risk was recalculated
         }
     except Exception as e:
         print(f"Error in generate_anomalies_from_agents: {str(e)}")
         raise
+
 
 async def convert_agent_results_to_anomalies(agent_results: List[Dict]):
     """

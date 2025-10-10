@@ -498,6 +498,16 @@
 
           <!-- 4. Risk & Compliance Dashboard -->
           <section id="page-risk" class="hidden space-y-6">
+            <!-- ADD THIS -->
+            <div class="flex items-center justify-between">
+              <h2 class="text-lg font-semibold text-steel-900 dark:text-steel-100">Risk & Compliance</h2>
+              <button onclick="refreshRiskData()" class="px-4 py-2.5 rounded-xl bg-primary-600 text-white hover:bg-primary-700 flex items-center gap-2">
+                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                </svg>
+                <span>Recalculate Risks</span>
+              </button>
+            </div>
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
               <!-- Vendor Risk Heatmap -->
               <div class="p-5 rounded-xl2 bg-white/90 dark:bg-steel-800/70 border border-steel-100 dark:border-steel-700 shadow-soft">
@@ -653,6 +663,35 @@
  <footer class="mt-10 py-6">
     </footer>
 
+    //////////////////////////////////////////////////////////////////
+
+    <!-- Modal Structure (should be in your main1.html) -->
+<div id="modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+  <div class="bg-white dark:bg-steel-800 rounded-xl shadow-2xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-hidden">
+    <!-- Header -->
+    <div class="flex items-center justify-between p-4 border-b border-steel-200 dark:border-steel-700">
+      <h3 id="modalTitle" class="text-lg font-semibold text-steel-900 dark:text-steel-100"></h3>
+      <button onclick="closeModal()" class="text-steel-500 hover:text-steel-700 dark:hover:text-steel-300">
+        <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+        </svg>
+      </button>
+    </div>
+    
+    <!-- Body -->
+    <div id="modalBody" class="p-4 overflow-y-auto max-h-96">
+      <!-- Dynamic content goes here -->
+    </div>
+    
+    <!-- Footer (Optional) -->
+    <div id="modalFooter" class="flex items-center justify-end gap-2 p-4 border-t border-steel-200 dark:border-steel-700">
+      <!-- Dynamic buttons go here -->
+    </div>
+  </div>
+</div>
+
+
+    /////////////////////////////////////////////////////////////////////
   <!-- Feedback Modal -->
   <div id="feedbackModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden z-50">
     <div class="absolute inset-0 flex items-center justify-center px-4">
@@ -2178,70 +2217,256 @@ async function triggerAgentScan() {
 
 
     // RISK & COMPLIANCE
-    function renderRisk() {
-      // Vendor heat
+    let riskData = {
+    vendors: [],
+    departments: [],
+    frameworks: [],
+    clusters: [],
+    highlights: []
+   };
+
+
+    async function renderRisk() {
+      await loadRiskData();
+      renderVendorHeat();
+      renderDepartmentHeat();
+      renderClusters();
+      renderComplianceTracker();
+      renderHighlights();
+    }
+
+    async function loadRiskData() {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/audit/risk-compliance/all`);
+        const data = await response.json();
+        
+        riskData.vendors = data.vendor_risk || [];
+        riskData.departments = data.department_risk || [];
+        riskData.frameworks = data.compliance_frameworks || [];
+        riskData.clusters = data.risk_clusters || [];
+        riskData.highlights = data.risk_highlights || [];
+        
+        console.log('Risk data loaded:', riskData);
+      } catch (error) {
+        console.error('Error loading risk data:', error);
+      }
+   }
+   function renderVendorHeat() {
       const vendor = document.getElementById('vendorHeat');
+      if (!vendor) return;
+      
       vendor.innerHTML = '';
-      ['A','B','C','D','E','F','G','H','I','J','K','L'].forEach((v,i)=>{
-        const score = Math.floor(Math.random()*100);
-        const color = score>80?'bg-critical/80': score>60?'bg-warning/80': score>40?'bg-yellow-400/70':'bg-emerald-400/80';
+      
+      if (riskData.vendors.length === 0) {
+        vendor.innerHTML = '<p class="text-steel-500 text-sm">No vendor data available</p>';
+        return;
+      }
+      
+      riskData.vendors.forEach(v => {
+        const color = getRiskColor(v.risk_level);
         const cell = document.createElement('div');
-        cell.className = `heat-cell transition text-white text-xs text-center py-6 rounded-lg ${color}`;
-        cell.textContent = `V${v}`;
-        cell.title = `Vendor ${v} — ${score}`;
+        cell.className = `heat-cell transition text-white text-xs text-center py-6 rounded-lg cursor-pointer ${color} hover:scale-105`;
+        cell.textContent = v.vendor_code;
+        cell.title = `${v.vendor_name} — ${v.risk_level} (Score: ${v.risk_score})`;
+        cell.onclick = () => drilldownVendor(v.vendor_code);
         vendor.appendChild(cell);
       });
-      // Department heat
+   }
+
+   function renderDepartmentHeat() {
       const dept = document.getElementById('deptHeat');
+      if (!dept) return;
+      
       dept.innerHTML = '';
-      ['IT','Finance','Ops','Plant','HR','Sales','Legal','QA','Supply'].forEach((d,i)=>{
-        const score = Math.floor(Math.random()*100);
-        const color = score>80?'bg-critical/80': score>60?'bg-warning/80': score>40?'bg-yellow-400/70':'bg-emerald-400/80';
+      
+      if (riskData.departments.length === 0) {
+        dept.innerHTML = '<p class="text-steel-500 text-sm">No department data available</p>';
+        return;
+      }
+      
+      riskData.departments.forEach(d => {
+        const color = getRiskColor(d.risk_level);
         const cell = document.createElement('div');
-        cell.className = `heat-cell transition text-white text-xs text-center py-6 rounded-lg ${color}`;
-        cell.textContent = d;
-        cell.title = `${d} — ${score}`;
+        cell.className = `heat-cell transition text-white text-xs text-center py-6 rounded-lg cursor-pointer ${color} hover:scale-105`;
+        cell.textContent = d.department_code;
+        cell.title = `${d.department_name} — ${d.risk_level} (Score: ${d.risk_score})\n${d.open_findings} open findings, ${d.critical_issues} critical`;
+        cell.onclick = () => drilldownDepartment(d.department_code);
         dept.appendChild(cell);
       });
-      // Clusters
+    }
+
+    function renderClusters() {
       const cl = document.getElementById('clusterWrap');
+      if (!cl) return;
+      
       cl.innerHTML = '';
-      for (let i=1;i<=12;i++) {
-        const size = 28 + Math.random()*22;
-        const dom = ['Critical','High','Medium'][Math.floor(Math.random()*3)];
-        const bg = dom==='Critical'?'bg-red-500/80':dom==='High'?'bg-orange-500/80':'bg-yellow-500/70';
-        const b = document.createElement('div');
-        b.className = `rounded-full ${bg} text-white text-xs flex items-center justify-center`;
-        b.style.width = `${size}px`; b.style.height = `${size}px`;
-        b.title = `Cluster #${i} — ${dom}`;
-        b.textContent = i;
-        cl.appendChild(b);
+      
+      if (riskData.clusters.length === 0) {
+        cl.innerHTML = '<p class="text-steel-500 text-sm">No cluster data available</p>';
+        return;
       }
-      // Compliance tracker
-      const items = [
-        { k:'SOX', pct:72, desc:'ITGC Change Mgmt controls' },
-        { k:'GDPR', pct:84, desc:'Records of Processing, DPIA coverage' },
-        { k:'ISO 27001', pct:66, desc:'Access Control & A.12' },
-        { k:'ESG', pct:78, desc:'Supplier disclosures & emissions' },
-      ];
+      
+      riskData.clusters.forEach(cluster => {
+        const size = 28 + (cluster.cluster_size || 0) * 1.5; // Size based on cluster size
+        const bg = cluster.dominant_risk === 'Critical' ? 'bg-red-500/80' :
+                  cluster.dominant_risk === 'High' ? 'bg-orange-500/80' :
+                  cluster.dominant_risk === 'Medium' ? 'bg-yellow-500/70' : 'bg-emerald-500/70';
+        
+        const b = document.createElement('div');
+        b.className = `rounded-full ${bg} text-white text-xs flex items-center justify-center cursor-pointer hover:scale-110 transition`;
+        b.style.width = `${Math.min(size, 50)}px`;
+        b.style.height = `${Math.min(size, 50)}px`;
+        b.title = `Cluster #${cluster.cluster_id}: ${cluster.cluster_name || 'Unnamed'}\nSize: ${cluster.cluster_size}\nRisk: ${cluster.dominant_risk}`;
+        b.textContent = cluster.cluster_id;
+        b.onclick = () => drilldownCluster(cluster.cluster_id);
+        cl.appendChild(b);
+      });
+    }
+
+    function renderComplianceTracker() {
       const list = document.getElementById('complianceList');
-      list.innerHTML='';
-      items.forEach(it=>{
+      if (!list) return;
+      
+      list.innerHTML = '';
+      
+      if (riskData.frameworks.length === 0) {
+        list.innerHTML = '<p class="text-steel-500 text-sm">No compliance data available</p>';
+        return;
+      }
+      
+      riskData.frameworks.forEach(fw => {
         const row = document.createElement('div');
-        row.className = 'p-3 rounded-xl border border-steel-100 dark:border-steel-700 bg-white/60 dark:bg-steel-900/30';
+        row.className = 'p-3 rounded-xl border border-steel-100 dark:border-steel-700 bg-white/60 dark:bg-steel-900/30 hover:bg-white/80 dark:hover:bg-steel-900/50 transition cursor-pointer';
+        row.onclick = () => drilldownCompliance(fw.framework_code);
         row.innerHTML = `
           <div class="flex items-center justify-between">
-            <div class="font-medium">${it.k}</div>
-            <div class="text-sm text-steel-500">${it.desc}</div>
+            <div class="font-medium">${fw.framework_name}</div>
+            <div class="text-sm text-steel-500">${fw.focus_area || ''}</div>
           </div>
           <div class="mt-2 h-2 rounded-full bg-steel-100 dark:bg-steel-700 overflow-hidden">
-            <div class="h-2 bg-gradient-to-r from-emerald-400 via-yellow-400 to-red-500" style="width:${it.pct}%"></div>
+            <div class="h-2 bg-gradient-to-r from-emerald-400 via-yellow-400 to-red-500" style="width:${fw.completion_percentage}%"></div>
           </div>
-          <div class="mt-1 text-xs text-steel-500">${it.pct}% complete</div>
+          <div class="mt-1 text-xs text-steel-500">${fw.completion_percentage}% complete (${fw.completed_controls}/${fw.total_controls} controls)</div>
         `;
         list.appendChild(row);
       });
     }
+
+    function renderHighlights() {
+        // Static highlights are already in HTML, but we can update dynamically if needed
+        const highlightsList = document.querySelector('#page-risk ul');
+        if (!highlightsList || riskData.highlights.length === 0) return;
+        
+        highlightsList.innerHTML = riskData.highlights.map(h => 
+          `<li>${h.highlight_text}</li>`
+        ).join('');
+      }
+
+      function getRiskColor(riskLevel) {
+        const colorMap = {
+          'Critical': 'bg-red-500/80',
+          'High': 'bg-orange-500/80',
+          'Medium': 'bg-yellow-400/70',
+          'Low': 'bg-emerald-400/80'
+        };
+        return colorMap[riskLevel] || 'bg-steel-400/70';
+      }
+
+      async function drilldownVendor(vendorCode) {
+        try {
+          const response = await fetch(`${API_BASE_URL}/api/audit/risk-compliance/vendor/${vendorCode}/anomalies`);
+          const data = await response.json();
+          
+          openModal(`Vendor ${vendorCode} - Risk Details`, `
+            <div class="space-y-3">
+              <div class="text-sm font-semibold">Anomalies Found: ${data.anomalies.length}</div>
+              ${data.anomalies.length > 0 ? `
+                <div class="space-y-2 max-h-96 overflow-y-auto">
+                  ${data.anomalies.map(a => `
+                    <div class="p-3 rounded-lg bg-steel-50 dark:bg-steel-900/40 border border-steel-100 dark:border-steel-700">
+                      <div class="font-medium">${a.id} - $${Number(a.amount).toLocaleString()}</div>
+                      <div class="text-xs text-steel-600 dark:text-steel-300 mt-1">${a.reasoning || 'No details available'}</div>
+                      <div class="text-xs mt-1">${riskPill(a.risk)}</div>
+                    </div>
+                  `).join('')}
+                </div>
+              ` : '<p class="text-steel-500 text-sm">No anomalies found for this vendor</p>'}
+            </div>
+          `, `<button class="px-4 py-2.5 rounded-lg bg-primary-600 text-white" onclick="closeModal()">Close</button>`);
+        } catch (error) {
+          console.error('Error loading vendor details:', error);
+          openModal('Error', '<p class="text-red-500">Failed to load vendor details</p>', '<button class="px-4 py-2.5 rounded-lg bg-primary-600 text-white" onclick="closeModal()">Close</button>');
+        }
+      }
+
+      async function drilldownDepartment(deptCode) {
+        try {
+          const response = await fetch(`${API_BASE_URL}/api/audit/risk-compliance/department/${deptCode}/anomalies`);
+          const data = await response.json();
+          
+          openModal(`Department ${deptCode} - Risk Details`, `
+            <div class="space-y-3">
+              <div class="text-sm font-semibold">Anomalies Found: ${data.anomalies.length}</div>
+              ${data.anomalies.length > 0 ? `
+                <div class="space-y-2 max-h-96 overflow-y-auto">
+                  ${data.anomalies.map(a => `
+                    <div class="p-3 rounded-lg bg-steel-50 dark:bg-steel-900/40 border border-steel-100 dark:border-steel-700">
+                      <div class="font-medium">${a.id} - $${Number(a.amount).toLocaleString()}</div>
+                      <div class="text-xs text-steel-600 dark:text-steel-300 mt-1">${a.reasoning || 'No details available'}</div>
+                      <div class="text-xs mt-1">${riskPill(a.risk)}</div>
+                    </div>
+                  `).join('')}
+                </div>
+              ` : '<p class="text-steel-500 text-sm">No anomalies found for this department</p>'}
+            </div>
+          `, `<button class="px-4 py-2.5 rounded-lg bg-primary-600 text-white" onclick="closeModal()">Close</button>`);
+        } catch (error) {
+          console.error('Error loading department details:', error);
+          openModal('Error', '<p class="text-red-500">Failed to load department details</p>', '<button class="px-4 py-2.5 rounded-lg bg-primary-600 text-white" onclick="closeModal()">Close</button>');
+        }
+      }
+            
+
+      async function drilldownCluster(clusterId) {
+          try {
+            const response = await fetch(`${API_BASE_URL}/api/audit/risk-compliance/cluster/${clusterId}`);
+            const data = await response.json();
+            
+            const cluster = data.cluster;
+            const anomalies = data.anomalies;
+            
+            openModal(`Cluster #${clusterId} - ${cluster?.cluster_name || 'Unnamed'}`, `
+              <div class="space-y-3">
+                <div class="text-sm">${cluster?.description || 'No description available'}</div>
+                <div class="text-sm font-semibold">Cluster Size: ${cluster?.cluster_size || 0} anomalies</div>
+                <div class="text-sm">Dominant Risk: ${riskPill(cluster?.dominant_risk || 'Medium')}</div>
+                ${anomalies.length > 0 ? `
+                  <div class="space-y-2 max-h-96 overflow-y-auto">
+                    ${anomalies.map(a => `
+                      <div class="p-3 rounded-lg bg-steel-50 dark:bg-steel-900/40 border border-steel-100 dark:border-steel-700">
+                        <div class="font-medium">${a.id} - $${Number(a.amount).toLocaleString()}</div>
+                        <div class="text-xs text-steel-600 dark:text-steel-300 mt-1">${a.reasoning || 'No details available'}</div>
+                        <div class="text-xs mt-1">${riskPill(a.risk)}</div>
+                      </div>
+                    `).join('')}
+                  </div>
+                ` : '<p class="text-steel-500 text-sm">No anomalies found in this cluster</p>'}
+              </div>
+            `, `<button class="px-4 py-2.5 rounded-lg bg-primary-600 text-white" onclick="closeModal()">Close</button>`);
+          } catch (error) {
+            console.error('Error loading cluster details:', error);
+            openModal('Error', '<p class="text-red-500">Failed to load cluster details</p>', '<button class="px-4 py-2.5 rounded-lg bg-primary-600 text-white" onclick="closeModal()">Close</button>');
+          }
+        }
+
+        function drilldownCompliance(frameworkCode) {
+            openModal(`${frameworkCode} Compliance Checklist`, `
+              <div class="text-sm text-steel-600 dark:text-steel-300 mb-3">This is a placeholder for the detailed ${frameworkCode} checklist.</div>
+              <div class="text-xs text-steel-500">Full checklist functionality coming soon...</div>
+            `, `<button class="px-4 py-2.5 rounded-lg bg-primary-600 text-white" onclick="closeModal()">Close</button>`);
+          }
+
+
     function openChecklist() {
       const body = document.getElementById('drawerBody');
       body.innerHTML = `
@@ -2255,8 +2480,48 @@ async function triggerAgentScan() {
       `;
       document.getElementById('drawer').classList.remove('translate-x-full');
     }
-    function closeDrawer() { document.getElementById('drawer').classList.add('translate-x-full'); }
-    function saveChecklist() { closeDrawer(); toast('Checklist saved'); }
+    function closeDrawer() { 
+      document.getElementById('drawer').classList.add('translate-x-full'); 
+    }
+
+    function saveChecklist() { 
+      closeDrawer(); 
+      toast('Checklist saved'); 
+    }
+
+    async function refreshRiskData() {
+      try {
+        // Show loading state
+        const button = event.target.closest('button');
+        const originalHTML = button.innerHTML;
+        button.innerHTML = '<svg class="animate-spin h-5 w-5" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Calculating...';
+        button.disabled = true;
+        
+        // Call backend to recalculate risks
+        const response = await fetch(`${API_BASE_URL}/api/audit/risk-compliance/calculate`, { method: 'POST' });
+        const result = await response.json();
+        
+        console.log('Risk calculation result:', result);
+        
+        // Reload data
+        await loadRiskData();
+        renderVendorHeat();
+        renderDepartmentHeat();
+        renderClusters();
+        renderComplianceTracker();
+        renderHighlights();
+        
+        // Restore button
+        button.innerHTML = originalHTML;
+        button.disabled = false;
+        
+        alert('Risk scores updated successfully!');
+      } catch (error) {
+        console.error('Error refreshing risk data:', error);
+        alert('Error updating risks. Check console for details.');
+      }
+    }
+
 
     // REPORTS & EVIDENCE
     function renderReports() {
@@ -3904,13 +4169,50 @@ async function triggerAgentScan() {
     function escapeHtml(s) { return s.replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;' }[m])); }
 
     // MODAL
-    function openModal(title, bodyHtml, footerHtml) {
-      document.getElementById('modalTitle').innerHTML = title;
-      document.getElementById('modalBody').innerHTML = bodyHtml;
-      //document.getElementById('modalFooter').innerHTML = footerHtml || '';
-      document.getElementById('modal').classList.remove('hidden');
+function openModal(title, bodyHtml, footerHtml) {
+  const modalTitle = document.getElementById('modalTitle');
+  const modalBody = document.getElementById('modalBody');
+  const modalFooter = document.getElementById('modalFooter');
+  const modal = document.getElementById('modal');
+  
+  // Check if modal elements exist
+  if (!modal) {
+    console.error('Modal element not found');
+    return;
+  }
+  
+  // Set title
+  if (modalTitle) {
+    modalTitle.innerHTML = title;
+  }
+  
+  // Set body
+  if (modalBody) {
+    modalBody.innerHTML = bodyHtml;
+  }
+  
+  // Set footer (optional)
+  if (modalFooter) {
+    if (footerHtml) {
+      modalFooter.innerHTML = footerHtml;
+      modalFooter.style.display = 'flex'; // Show footer if content provided
+    } else {
+      modalFooter.innerHTML = '';
+      modalFooter.style.display = 'none'; // Hide footer if no content
     }
-    function closeModal() { document.getElementById('modal').classList.add('hidden'); }
+  }
+  
+  // Show modal
+  modal.classList.remove('hidden');
+}
+
+function closeModal() {
+  const modal = document.getElementById('modal');
+  if (modal) {
+    modal.classList.add('hidden');
+  }
+}
+
 
     // Toast (simple)
     function toast(msg) {
