@@ -374,6 +374,17 @@
 
           <!-- 3. Audit Exploration -->
           <section id="page-explore" class="hidden space-y-6">
+            <!-- Add this above the search form in your Audit Exploration section -->
+            <div class="mb-4">
+              <button onclick="triggerAgentScan()" class="px-4 py-2.5 rounded-xl bg-primary-600 text-white hover:bg-primary-700">
+                <span class="flex items-center gap-2">
+                  <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                  </svg>
+                  Run Agent Scan
+                </span>
+              </button>
+            </div>
             <div class="flex flex-col lg:flex-row gap-4">
               <form id="exploreSearchForm" class="flex-1 flex items-center gap-2" onsubmit="event.preventDefault(); applyExploreFilters();">
                 <div class="relative flex-1">
@@ -1450,135 +1461,639 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     }
 
-    // AGENTS
-    const agentDefs = [
-      { name:'Finance Auditor', status:'Active', conf:0.93, findings:['$50k duplicate invoice','Missing 3-way match','Round-dollar approvals'], tag:'Finance' },
-      { name:'Process Miner', status:'Scanning', conf:0.88, findings:['Skipped approval path','Rework loop O2C','Bottleneck in GRN'], tag:'Process' },
-      { name:'IT Auditor', status:'Active', conf:0.91, findings:['PRD change without CAB','SoD violation','Excessive admin rights'], tag:'IT' },
-      { name:'Compliance Checker', status:'Idle', conf:0.87, findings:['GDPR DPIA overdue','ISO27001 A.9 gap','ESG supplier doc'], tag:'Compliance' },
-      { name:'IoT Auditor', status:'Active', conf:0.82, findings:['Torque variance outlier','Line 3 sensor drift'], tag:'IoT' },
-    ];
-    function renderAgents() {
-      const grid = document.getElementById('agentGrid');
-      grid.innerHTML = '';
-      agentDefs.forEach((a,i)=>{
-        const card = document.createElement('div');
-        card.className = 'card-hover p-5 rounded-xl2 bg-white/90 dark:bg-steel-800/70 border border-steel-100 dark:border-steel-700 shadow-soft flex flex-col';
-        const statusDot = a.status==='Active'?'bg-emerald-500': a.status==='Scanning'?'bg-warning':'bg-steel-400';
-        card.innerHTML = `
-          <div class="flex items-start justify-between">
-            <div>
-              <div class="font-semibold">${a.name}</div>
-              <div class="mt-1 text-xs text-steel-500 flex items-center gap-2">
-                <span class="size-2.5 rounded-full ${statusDot}"></span>${a.status}
-              </div>
-            </div>
-            <div class="relative size-14 rounded-full ring-conic" style="--ring-color:#2157d5; --pct:${a.conf*100}">
-              <div class="absolute inset-1 rounded-full bg-white dark:bg-steel-900 flex items-center justify-center text-sm font-semibold">${Math.round(a.conf*100)}%</div>
-            </div>
-          </div>
-          <ul class="mt-4 text-sm space-y-1">${a.findings.slice(0,3).map(f=>`<li class="flex items-center gap-2"><span class="size-1.5 rounded-full bg-primary-600"></span>${f}</li>`).join('')}</ul>
-          <div class="mt-4 flex items-center gap-2">
-            <button class="px-3 py-2 rounded-lg bg-primary-600 text-white text-sm" onclick="openAgentExplain(${i})">Explain</button>
-            <button class="px-3 py-2 rounded-lg border border-steel-200 dark:border-steel-700 text-sm" onclick="pushCollab('${a.name}','Shared insights to ${a.tag}')">Share</button>
-          </div>
-        `;
-        grid.appendChild(card);
-      });
+// ============================================
+// AGENTS - UPDATED WITH REAL BACKEND
+// ============================================
+let agentDefs = [
+  { name:'Finance Auditor', status:'Active', conf:0.93, findings:[], tag:'Finance', lastScan: null },
+  { name:'Process Miner', status:'Scanning', conf:0.88, findings:[], tag:'Process', lastScan: null },
+  { name:'IT Auditor', status:'Active', conf:0.91, findings:[], tag:'IT', lastScan: null },
+  { name:'Compliance Checker', status:'Idle', conf:0.87, findings:[], tag:'Compliance', lastScan: null },
+  { name:'IoT Auditor', status:'Active', conf:0.82, findings:[], tag:'IoT', lastScan: null },
+];
 
-      // Collaboration feed
-      const seed = [
-        { agent:'Finance Auditor', text:'Flagged 3 duplicate vendors with overlapping IBANs', time:'2m' },
-        { agent:'Process Miner', text:'Detected skipped approvals in P2P for 12 cases', time:'14m' },
-        { agent:'IT Auditor', text:'Found SoD conflict between AP and Vendor Master roles', time:'28m' },
-      ];
-      const feed = document.getElementById('collabFeed');
-      feed.innerHTML = '';
-      seed.forEach(s=> appendFeed(s.agent, s.text, s.time));
+async function renderAgents() {
+  // Load real Finance Auditor data from backend
+  await Promise.all([
+    loadFinanceAgentData(),
+    loadProcessMinerData(),
+    loadITAuditorData(),
+    loadComplianceCheckerData(),
+    loadIoTAuditorData()
+  ]);
+  
+  const grid = document.getElementById('agentGrid');
+  grid.innerHTML = '';
+  
+  agentDefs.forEach((a,i)=>{
+    const card = document.createElement('div');
+    card.className = 'card-hover p-5 rounded-xl2 bg-white/90 dark:bg-steel-800/70 border border-steel-100 dark:border-steel-700 shadow-soft flex flex-col';
+    const statusDot = a.status==='Active'?'bg-emerald-500': a.status==='Scanning'?'bg-warning':'bg-steel-400';
+    
+    // Show "Loading..." if no findings yet
+    const findingsList = a.findings.length > 0 
+      ? a.findings.slice(0,3).map(f=>{
+          const title = typeof f === 'string' ? f : f.title;
+          return `<li class="flex items-center gap-2"><span class="size-1.5 rounded-full bg-primary-600"></span>${title}</li>`;
+        }).join('')
+      : '<li class="text-steel-400 text-xs">No issues detected</li>';
+    
+    // Determine button type based on agent index
+    let actionButton = '';
+    if (i === 0) {
+      actionButton = `<button class="px-3 py-2 rounded-lg border border-primary-200 dark:border-primary-700 text-sm" onclick="scanFinanceAgent()">Re-scan</button>`;
+    } else if (i === 1) {
+      actionButton = `<button class="px-3 py-2 rounded-lg border border-primary-200 dark:border-primary-700 text-sm" onclick="scanProcessMinerAgent()">Re-scan</button>`;
+    } else if (i === 2) {
+      actionButton = `<button class="px-3 py-2 rounded-lg border border-primary-200 dark:border-primary-700 text-sm" onclick="scanITAuditorAgent()">Re-scan</button>`;
+    } else if (i === 3) {
+      actionButton = `<button class="px-3 py-2 rounded-lg border border-primary-200 dark:border-primary-700 text-sm" onclick="scanComplianceCheckerAgent()">Re-scan</button>`;
+    }else if(i==4){
+      actionButton = `<button class="px-3 py-2 rounded-lg border border-primary-200 dark:border-primary-700 text-sm" onclick="scanIoTAuditorAgent()">Re-scan</button>`;
+    } 
+    else {
+      actionButton = `<button class="px-3 py-2 rounded-lg border border-steel-200 dark:border-steel-700 text-sm" onclick="pushCollab('${a.name}','Shared insights to ${a.tag}')">Share</button>`;
     }
-    function pushCollab(agent, text) {
-      appendFeed(agent, text, 'now');
+
+    
+    card.innerHTML = `
+      <div class="flex items-start justify-between">
+        <div>
+          <div class="font-semibold">${a.name}</div>
+          <div class="mt-1 text-xs text-steel-500 flex items-center gap-2">
+            <span class="size-2.5 rounded-full ${statusDot}"></span>${a.status}
+          </div>
+          ${a.lastScan ? `<div class="mt-1 text-xs text-steel-400">Last scan: ${new Date(a.lastScan).toLocaleTimeString()}</div>` : ''}
+        </div>
+        <div class="relative size-14 rounded-full ring-conic" style="--ring-color:#2157d5; --pct:${a.conf*100}">
+          <div class="absolute inset-1 rounded-full bg-white dark:bg-steel-900 flex items-center justify-center text-sm font-semibold">${Math.round(a.conf*100)}%</div>
+        </div>
+      </div>
+      <ul class="mt-4 text-sm space-y-1">${findingsList}</ul>
+      <div class="mt-4 flex items-center gap-2">
+        <button class="px-3 py-2 rounded-lg bg-primary-600 text-white text-sm" onclick="openAgentExplain(${i})">Explain</button>
+        ${actionButton}
+      </div>
+    `;
+    grid.appendChild(card);
+  });
+
+  renderCollaborationFeed();
+}
+
+// Load real Finance Auditor data from backend
+async function loadFinanceAgentData() {
+  try {
+    console.log('Loading Finance Auditor data...');
+    const response = await fetch(`${API_BASE_URL}/api/agents/finance/status`);
+    
+    if (!response.ok) {
+      console.error('Failed to load Finance Auditor:', response.status);
+      return;
     }
-    function appendFeed(agent, text, time) {
-      const feed = document.getElementById('collabFeed');
-      const item = document.createElement('div');
-      item.className = 'p-3 rounded-lg border border-steel-100 dark:border-steel-700 bg-white/60 dark:bg-steel-900/30';
-      item.innerHTML = `
-        <div class="text-sm"><span class="font-semibold">${agent}</span> — ${text}</div>
-        <div class="text-xs text-steel-500 mt-1">${time}</div>
-      `;
-      feed.prepend(item);
+    
+    const data = await response.json();
+    console.log('Finance Auditor data:', data);
+    
+    // Update Finance Auditor in agentDefs
+    agentDefs[0] = {
+      name: 'Finance Auditor',
+      status: data.status.charAt(0).toUpperCase() + data.status.slice(1),
+      conf: data.confidence,
+      findings: data.findings || [],
+      tag: 'Finance',
+      lastScan: data.last_scan
+    };
+    
+    // Add to collaboration feed if new findings
+    if (data.findings && data.findings.length > 0) {
+      data.findings.forEach(f => {
+        appendFeed('Finance Auditor', f.title, 'just now');
+      });
     }
-    function openAgentExplain(i) {
-      const a = agentDefs[i];
-      openModal('Agent Explainability', `
+    
+  } catch (error) {
+    console.error('Error loading Finance Auditor:', error);
+    // Keep static data as fallback
+  }
+}
+
+// Load real Process Miner data from backend
+async function loadProcessMinerData() {
+  try {
+    console.log('Loading Process Miner data...');
+    const response = await fetch(`${API_BASE_URL}/api/agents/process/status`);
+    
+    if (!response.ok) {
+      console.error('Failed to load Process Miner:', response.status);
+      return;
+    }
+    
+    const data = await response.json();
+    console.log('Process Miner data:', data);
+    
+    // Update Process Miner in agentDefs
+    agentDefs[1] = {
+      name: 'Process Miner',
+      status: data.status.charAt(0).toUpperCase() + data.status.slice(1),
+      conf: data.confidence,
+      findings: data.findings || [],
+      tag: 'Process',
+      lastScan: data.last_scan
+    };
+    
+  } catch (error) {
+    console.error('Error loading Process Miner:', error);
+  }
+}
+
+// Load IT Auditor data
+async function loadITAuditorData() {
+  try {
+    console.log('Loading IT Auditor data...');
+    const response = await fetch(`${API_BASE_URL}/api/agents/it/status`);
+    
+    if (!response.ok) {
+      console.error('Failed to load IT Auditor:', response.status);
+      return;
+    }
+    
+    const data = await response.json();
+    console.log('IT Auditor data:', data);
+    
+    agentDefs[2] = {
+      name: 'IT Auditor',
+      status: data.status.charAt(0).toUpperCase() + data.status.slice(1),
+      conf: data.confidence,
+      findings: data.findings || [],
+      tag: 'IT',
+      lastScan: data.last_scan
+    };
+    
+  } catch (error) {
+    console.error('Error loading IT Auditor:', error);
+  }
+}
+
+// Load Compliance Checker data
+async function loadComplianceCheckerData() {
+  try {
+    console.log('Loading Compliance Checker data...');
+    const response = await fetch(`${API_BASE_URL}/api/agents/compliance/status`);
+    if (!response.ok) return;
+    
+    const data = await response.json();
+    agentDefs[3] = {
+      name: 'Compliance Checker',
+      status: data.status.charAt(0).toUpperCase() + data.status.slice(1),
+      conf: data.confidence,
+      findings: data.findings || [],
+      tag: 'Compliance',
+      lastScan: data.last_scan
+    };
+  } catch (error) {
+    console.error('Error loading Compliance Checker:', error);
+  }
+}
+
+async function loadIoTAuditorData() {
+  try {
+    console.log('Loading IoT Auditor data...');
+    const response = await fetch(`${API_BASE_URL}/api/agents/iot/status`);
+    if (!response.ok) return;
+    const data = await response.json();
+    agentDefs[4] = {
+      name: 'IoT Auditor',
+      status: data.status.charAt(0).toUpperCase() + data.status.slice(1),
+      conf: data.confidence,
+      findings: data.findings || [],
+      tag: 'IoT',
+      lastScan: data.last_scan
+    };
+  } catch (error) {
+    console.error('Error loading IoT Auditor:', error);
+  }
+}
+
+
+// Scan Finance Agent (triggers backend scan)
+async function scanFinanceAgent() {
+  try {
+    showNotification('Scanning Finance Auditor...', 'info');
+    
+    // Update UI to show scanning state
+    agentDefs[0].status = 'Scanning';
+    renderAgents();
+    
+    const response = await fetch(`${API_BASE_URL}/api/agents/finance/scan`, {
+      method: 'POST'
+    });
+    
+    if (!response.ok) {
+      throw new Error('Scan failed');
+    }
+    
+    const result = await response.json();
+    console.log('Scan result:', result);
+    
+    showSuccess(`Finance Auditor scan complete! Found ${result.findings?.length || 0} issues.`);
+    
+    // Reload agent data
+    await loadFinanceAgentData();
+    renderAgents();
+    
+  } catch (error) {
+    console.error('Error scanning Finance Auditor:', error);
+    showError('Failed to scan Finance Auditor: ' + error.message);
+    
+    // Reset status
+    agentDefs[0].status = 'Active';
+    renderAgents();
+  }
+}
+
+// Scan Process Miner Agent (triggers backend scan)
+async function scanProcessMinerAgent() {
+  try {
+    showNotification('Scanning Process Miner...', 'info');
+    
+    agentDefs[1].status = 'Scanning';
+    renderAgents();
+    
+    const response = await fetch(`${API_BASE_URL}/api/agents/process/scan`, {
+      method: 'POST'
+    });
+    
+    if (!response.ok) {
+      throw new Error('Scan failed');
+    }
+    
+    const result = await response.json();
+    console.log('Process Miner scan result:', result);
+    
+    showSuccess(`Process Miner scan complete! Found ${result.findings?.length || 0} issues.`);
+    
+    await loadProcessMinerData();
+    renderAgents();
+    
+  } catch (error) {
+    console.error('Error scanning Process Miner:', error);
+    showError('Failed to scan Process Miner: ' + error.message);
+    
+    agentDefs[1].status = 'Active';
+    renderAgents();
+  }
+}
+
+// Scan IT Auditor Agent
+async function scanITAuditorAgent() {
+  try {
+    showNotification('Scanning IT Auditor...', 'info');
+    agentDefs[2].status = 'Scanning';
+    renderAgents();
+    
+    const response = await fetch(`${API_BASE_URL}/api/agents/it/scan`, { method: 'POST' });
+    if (!response.ok) throw new Error('Scan failed');
+    
+    const result = await response.json();
+    showSuccess(`IT Auditor scan complete! Found ${result.findings?.length || 0} issues.`);
+    
+    await loadITAuditorData();
+    renderAgents();
+    
+  } catch (error) {
+    console.error('Error scanning IT Auditor:', error);
+    showError('Failed to scan IT Auditor: ' + error.message);
+    agentDefs[2].status = 'Active';
+    renderAgents();
+  }
+}
+
+// Scan Compliance Checker Agent
+async function scanComplianceCheckerAgent() {
+  try {
+    showNotification('Scanning Compliance Checker...', 'info');
+    agentDefs[3].status = 'Scanning';
+    renderAgents();
+    
+    const response = await fetch(`${API_BASE_URL}/api/agents/compliance/scan`, { method: 'POST' });
+    if (!response.ok) throw new Error('Scan failed');
+    
+    const result = await response.json();
+    showSuccess(`Compliance Checker scan complete! Found ${result.findings?.length || 0} issues.`);
+    
+    await loadComplianceCheckerData();
+    renderAgents();
+  } catch (error) {
+    console.error('Error scanning Compliance Checker:', error);
+    showError('Failed to scan Compliance Checker');
+    agentDefs[3].status = 'Idle';
+    renderAgents();
+  }
+}
+
+async function scanIoTAuditorAgent() {
+  try {
+    showNotification('Scanning IoT Auditor...', 'info');
+    agentDefs[4].status = 'Scanning';
+    renderAgents();
+
+    const response = await fetch(`${API_BASE_URL}/api/agents/iot/scan`, { method: 'POST' });
+    if (!response.ok) throw new Error('Scan failed');
+
+    const result = await response.json();
+    showSuccess(`IoT Auditor scan complete! Found ${result.findings?.length || 0} issues.`);
+
+    await loadIoTAuditorData();
+    renderAgents();
+  } catch (error) {
+    console.error('Error scanning IoT Auditor:', error);
+    showError('Failed to scan IoT Auditor');
+    agentDefs[4].status = 'Active';
+    renderAgents();
+  }
+}
+
+
+function renderCollaborationFeed() {
+  const seed = [
+    { agent:'Finance Auditor', text:'Flagged 3 duplicate vendors with overlapping IBANs', time:'2m' },
+    { agent:'Process Miner', text:'Detected skipped approvals in P2P for 12 cases', time:'14m' },
+    { agent:'IT Auditor', text:'Found SoD conflict between AP and Vendor Master roles', time:'28m' },
+  ];
+  const feed = document.getElementById('collabFeed');
+  feed.innerHTML = '';
+  seed.forEach(s=> appendFeed(s.agent, s.text, s.time));
+}
+
+function pushCollab(agent, text) {
+  appendFeed(agent, text, 'now');
+}
+
+function appendFeed(agent, text, time) {
+  const feed = document.getElementById('collabFeed');
+  const item = document.createElement('div');
+  item.className = 'p-3 rounded-lg border border-steel-100 dark:border-steel-700 bg-white/60 dark:bg-steel-900/30';
+  item.innerHTML = `
+    <div class="text-sm"><span class="font-semibold">${agent}</span> — ${text}</div>
+    <div class="text-xs text-steel-500 mt-1">${time}</div>
+  `;
+  feed.prepend(item);
+}
+
+async function openAgentExplain(i) {
+  const a = agentDefs[i];
+  
+  // If Finance Auditor, get real explanation from backend
+  if (i === 0 && a.findings.length > 0) {
+    try {
+      showNotification('Generating explanation...', 'info');
+      
+      const finding = typeof a.findings[0] === 'string' ? a.findings[0] : a.findings[0].title;
+      
+      const response = await fetch(`${API_BASE_URL}/api/agents/finance/explain`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          finding_title: finding
+        })
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to get explanation');
+      }
+      
+      const data = await response.json();
+      
+      openModal('Finance Auditor Explanation', `
         <div class="space-y-4">
           <div class="flex items-center gap-3">
             <div class="font-semibold">${a.name}</div>
             <div class="text-xs px-2 py-1 rounded-full bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300 border border-primary-100 dark:border-primary-800">Confidence ${Math.round(a.conf*100)}%</div>
           </div>
-          <div class="text-sm text-steel-700 dark:text-steel-200">Reasoning</div>
-          <div class="p-3 rounded-lg bg-steel-50 dark:bg-steel-900/40 border border-steel-100 dark:border-steel-700 text-sm">
-            Based on pattern deviations across 90 days, with emphasis on seasonality-adjusted thresholds and peer benchmarking.
+          <div class="text-sm text-steel-700 dark:text-steel-200">Finding</div>
+          <div class="p-3 rounded-lg bg-steel-50 dark:bg-steel-900/40 border border-steel-100 dark:border-steel-700 text-sm font-semibold">
+            ${finding}
           </div>
-          <div class="text-sm text-steel-700 dark:text-steel-200">Linked Evidence</div>
-          <ul class="text-sm list-disc pl-5 space-y-1">
-            <li>Audit Log Exports (ITSM Change-1234)</li>
-            <li>ERP Invoice Sample (INV-50811)</li>
-            <li>Supplier Onboarding Checklist (DPIA-42)</li>
-          </ul>
+          <div class="text-sm text-steel-700 dark:text-steel-200">AI Analysis</div>
+          <div class="p-3 rounded-lg bg-steel-50 dark:bg-steel-900/40 border border-steel-100 dark:border-steel-700 text-sm whitespace-pre-wrap">
+            ${data.explanation}
+          </div>
         </div>
       `, `<button class="px-4 py-2.5 rounded-lg bg-primary-600 text-white" onclick="closeModal()">Close</button>`);
+      
+    } catch (error) {
+      console.error('Error getting explanation:', error);
+      showError('Failed to generate explanation: ' + error.message);
+    }
+    
+  }else if (i === 1 && a.findings.length > 0) {
+    // If Process Miner, get real explanation from backend
+    try {
+      showNotification('Generating explanation...', 'info');
+      
+      const finding = typeof a.findings[0] === 'string' ? a.findings[0] : a.findings[0].title;
+      
+      const response = await fetch(`${API_BASE_URL}/api/agents/process/explain`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ finding_title: finding })
+      });
+      
+      if (!response.ok) throw new Error('Failed to get explanation');
+      
+      const data = await response.json();
+      
+      alert(`Process Miner Explanation\n\nFinding: ${finding}\n\nConfidence: ${Math.round(a.conf*100)}%\n\n${data.explanation}`);
+      
+    } catch (error) {
+      console.error('Error getting explanation:', error);
+      showError('Failed to generate explanation: ' + error.message);
+    }
+    
+  } // IT Auditor explanation
+  else if (i === 2 && a.findings.length > 0) {
+    try {
+      showNotification('Generating explanation...', 'info');
+      const finding = typeof a.findings[0] === 'string' ? a.findings[0] : a.findings[0].title;
+      
+      const response = await fetch(`${API_BASE_URL}/api/agents/it/explain`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ finding_title: finding })
+      });
+      
+      if (!response.ok) throw new Error('Failed to get explanation');
+      const data = await response.json();
+      
+      alert(`IT Auditor Explanation\n\nFinding: ${finding}\n\nConfidence: ${Math.round(a.conf*100)}%\n\n${data.explanation}`);
+      
+    } catch (error) {
+      console.error('Error getting explanation:', error);
+      showError('Failed to generate explanation');
+    }
+  }// Compliance Checker
+  else if (i === 3 && a.findings.length > 0) {
+    try {
+      showNotification('Generating explanation...', 'info');
+      const finding = typeof a.findings[0] === 'string' ? a.findings[0] : a.findings[0].title;
+      
+      const response = await fetch(`${API_BASE_URL}/api/agents/compliance/explain`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ finding_title: finding })
+      });
+      
+      if (!response.ok) throw new Error('Failed to get explanation');
+      const data = await response.json();
+      alert(`Compliance Checker Explanation\n\nFinding: ${finding}\n\n${data.explanation}`);
+    } catch (error) {
+      console.error('Error:', error);
+      showError('Failed to generate explanation');
+    }
+  }else if (i === 4 && a.findings.length > 0) {
+    try {
+      showNotification('Generating explanation...', 'info');
+      const finding = typeof a.findings[0] === 'string' ? a.findings[0] : a.findings[0].title;
+      const response = await fetch(`${API_BASE_URL}/api/agents/iot/explain`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({finding_title: finding})
+      });
+      if (!response.ok) throw new Error('Failed to get explanation');
+      const data = await response.json();
+      alert(`IoT Auditor Explanation\n\nFinding: ${finding}\n\nConfidence: ${Math.round(a.conf*100)}%\n\n${data.explanation}`);
+    } catch (error) {
+      console.error('Error getting IoT explanation:', error);
+      showError('Failed to generate explanation');
+    }
+  }
+   else {
+    // Static explanation for other agents
+    openModal('Agent Explainability', `
+      <div class="space-y-4">
+        <div class="flex items-center gap-3">
+          <div class="font-semibold">${a.name}</div>
+          <div class="text-xs px-2 py-1 rounded-full bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300 border border-primary-100 dark:border-primary-800">Confidence ${Math.round(a.conf*100)}%</div>
+        </div>
+        <div class="text-sm text-steel-700 dark:text-steel-200">Reasoning</div>
+        <div class="p-3 rounded-lg bg-steel-50 dark:bg-steel-900/40 border border-steel-100 dark:border-steel-700 text-sm">
+          Based on pattern deviations across 90 days, with emphasis on seasonality-adjusted thresholds and peer benchmarking.
+        </div>
+        <div class="text-sm text-steel-700 dark:text-steel-200">Linked Evidence</div>
+        <ul class="text-sm list-disc pl-5 space-y-1">
+          <li>Audit Log Exports (ITSM Change-1234)</li>
+          <li>ERP Invoice Sample (INV-50811)</li>
+          <li>Supplier Onboarding Checklist (DPIA-42)</li>
+        </ul>
+      </div>
+    `, `<button class="px-4 py-2.5 rounded-lg bg-primary-600 text-white" onclick="closeModal()">Close</button>`);
+  }
+}
+
+// Auto-refresh Finance Agent every 30 seconds
+setInterval(async () => {
+  if (currentPage === 'agents') {
+    await Promise.all([
+      loadFinanceAgentData(),
+      loadProcessMinerData(),
+      loadITAuditorData(),
+      loadComplianceCheckerData(),
+      loadIoTAuditorData
+    ]);
+    renderAgents();
+  }
+}, 30000);
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    // EXPLORE
+    let anomalies = [];
+
+    async function renderExplore() {
+      await loadAnomalies();
+      await buildCaseTimeline();
     }
 
-    // EXPLORE
-    const anomalies = [
-      { id:'TX-1001', amount: 51234, process:'Procure-to-Pay', risk:'High', agent:'Finance Auditor', status:'Open', evidence:['INV-501','PO-184'] },
-      { id:'TX-1002', amount: 980, process:'Order-to-Cash', risk:'Low', agent:'Process Miner', status:'In Progress', evidence:['ORD-11'] },
-      { id:'TX-1003', amount: 75220, process:'Record-to-Report', risk:'Critical', agent:'Finance Auditor', status:'Open', evidence:['JE-77','ACC-42'] },
-      { id:'TX-1004', amount: 14050, process:'IT Change', risk:'Medium', agent:'IT Auditor', status:'Open', evidence:['CHG-2103'] },
-      { id:'TX-1005', amount: 2305, process:'Procure-to-Pay', risk:'Medium', agent:'Compliance Checker', status:'Closed', evidence:['DPIA-12'] },
-      { id:'TX-1006', amount: 50500, process:'Order-to-Cash', risk:'High', agent:'Process Miner', status:'In Progress', evidence:['OC-89'] },
-    ];
-    function renderExplore() {
-      renderAnomalyTable(anomalies);
-      buildCaseTimeline();
+    async function loadAnomalies() {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/audit/exploration/anomalies`);
+    const data = await response.json();
+    anomalies = data.anomalies;
+    renderAnomalyTable(anomalies);
+  } catch (error) {
+    console.error('Error loading anomalies:', error);
+    // Fallback to empty array
+    anomalies = [];
+    renderAnomalyTable(anomalies);
+  }
+}
+
+  function riskPill(r) {
+  const map = { 
+    Low:'bg-emerald-50 text-emerald-700 border-emerald-200', 
+    Medium:'bg-yellow-50 text-yellow-700 border-yellow-200', 
+    High:'bg-orange-50 text-orange-700 border-orange-200', 
+    Critical:'bg-red-50 text-red-700 border-red-200' 
+  };
+  return `<span class="text-xs px-2 py-1 rounded-full border ${map[r]}">${r}</span>`;
+ }
+
+
+  function renderAnomalyTable(rows) {
+    const body = document.getElementById('anomalyTbody');
+    body.innerHTML = '';
+    
+    if (rows.length === 0) {
+      body.innerHTML = '<tr><td colspan="6" class="py-4 text-center text-steel-500">No anomalies found. Run agent scans to generate data.</td></tr>';
+      return;
     }
-    function riskPill(r) {
-      const map = { Low:'bg-emerald-50 text-emerald-700 border-emerald-200', Medium:'bg-yellow-50 text-yellow-700 border-yellow-200', High:'bg-orange-50 text-orange-700 border-orange-200', Critical:'bg-red-50 text-red-700 border-red-200' };
-      return `<span class="text-xs px-2 py-1 rounded-full border ${map[r]}">${r}</span>`;
-    }
-    function renderAnomalyTable(rows) {
-      const body = document.getElementById('anomalyTbody');
-      body.innerHTML = '';
-      rows.forEach((r, idx)=>{
-        const tr = document.createElement('tr');
-        tr.className = 'hover:bg-steel-50 dark:hover:bg-steel-700/40';
-        tr.innerHTML = `
-          <td class="py-2 px-2">${r.id}</td>
-          <td class="py-2 px-2">$${r.amount.toLocaleString()}</td>
-          <td class="py-2 px-2">${r.process}</td>
-          <td class="py-2 px-2">${riskPill(r.risk)}</td>
-          <td class="py-2 px-2">${r.agent}</td>
-          <td class="py-2 px-2">${r.status}</td>
-        `;
-        tr.onclick = ()=> openExplainRow(r);
-        body.appendChild(tr);
-      });
-    }
-    function openExplainRow(r) {
-      openModal(`Explain ${r.id}`, `
-        <div class="space-y-3">
-          <div class="text-sm">Amount <span class="font-semibold">$${r.amount.toLocaleString()}</span>, ${r.process} — ${riskPill(r.risk)}</div>
-          <div class="text-sm">Reasoning</div>
-          <div class="p-3 rounded-lg bg-steel-50 dark:bg-steel-900/40 border border-steel-100 dark:border-steel-700 text-sm">
-            Detected outlier vs peer transactions (z-score &gt; 3), vendor master matched with duplicated IBAN pattern, approval step possibly skipped.
+    
+    rows.forEach((r, idx)=>{
+      const tr = document.createElement('tr');
+      tr.className = 'hover:bg-steel-50 dark:hover:bg-steel-700/40 cursor-pointer';
+      tr.innerHTML = `
+        <td class="py-2 px-2">${r.id}</td>
+        <td class="py-2 px-2">$${Number(r.amount).toLocaleString()}</td>
+        <td class="py-2 px-2">${r.process}</td>
+        <td class="py-2 px-2">${riskPill(r.risk)}</td>
+        <td class="py-2 px-2">${r.agent}</td>
+        <td class="py-2 px-2">${r.status}</td>
+      `;
+      tr.onclick = ()=> openExplainRow(r);
+      body.appendChild(tr);
+    });
+  }
+
+
+    async function openExplainRow(r) {
+      try {
+        // Fetch detailed info from API
+        const response = await fetch(`${API_BASE_URL}/api/audit/exploration/anomaly/${r.id}`);
+        const detail = await response.json();
+        
+        openModal(`Explain ${r.id}`, `
+          <div class="space-y-3">
+            <div class="text-sm">Amount <span class="font-semibold">$${Number(detail.amount).toLocaleString()}</span>, ${detail.process} — ${riskPill(detail.risk)}</div>
+            <div class="text-sm font-semibold">Reasoning</div>
+            <div class="p-3 rounded-lg bg-steel-50 dark:bg-steel-900/40 border border-steel-100 dark:border-steel-700 text-sm">
+              ${detail.reasoning || 'Detected outlier vs peer transactions (z-score &gt; 3), vendor master matched with duplicated IBAN pattern, approval step possibly skipped.'}
+            </div>
+            <div class="text-sm font-semibold">Evidence</div>
+            <div class="flex flex-wrap gap-2">
+              ${detail.evidence.map(e=>`<span class="text-xs px-2 py-1 rounded-full bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300 border border-primary-100 dark:border-primary-800">${e}</span>`).join('')}
+            </div>
           </div>
-          <div class="text-sm">Evidence</div>
-          <div class="flex flex-wrap gap-2">${r.evidence.map(e=>`<span class="text-xs px-2 py-1 rounded-full bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300 border border-primary-100 dark:border-primary-800">${e}</span>`).join('')}</div>
-        </div>
-      `, `<button class="px-4 py-2.5 rounded-lg bg-primary-600 text-white" onclick="closeModal()">Close</button>`);
+        `, `<button class="px-4 py-2.5 rounded-lg bg-primary-600 text-white" onclick="closeModal()">Close</button>`);
+      } catch (error) {
+        console.error('Error loading anomaly detail:', error);
+        openModal(`Explain ${r.id}`, '<p class="text-red-500">Error loading details</p>', `<button class="px-4 py-2.5 rounded-lg bg-primary-600 text-white" onclick="closeModal()">Close</button>`);
+      }
     }
+
+
+
     function sortTable(key) {
       anomalySort.asc = anomalySort.key===key ? !anomalySort.asc : true;
       anomalySort.key = key;
@@ -1590,44 +2105,77 @@ document.addEventListener('DOMContentLoaded', function() {
       }
       renderAnomalyTable(rows);
     }
-    function applyExploreFilters() {
-      const q = document.getElementById('exploreSearch').value.toLowerCase();
+
+
+    async function applyExploreFilters() {
+      const q = document.getElementById('exploreSearch').value;
       const r = document.getElementById('filterRisk').value;
       const p = document.getElementById('filterProcess').value;
-      const filtered = anomalies.filter(x =>
-        (!q || JSON.stringify(x).toLowerCase().includes(q)) &&
-        (!r || x.risk===r) &&
-        (!p || x.process===p)
-      );
-      renderAnomalyTable(filtered);
+      
+      try {
+        // Build query string
+        const params = new URLSearchParams();
+        if (r) params.append('risk', r);
+        if (p) params.append('process', p);
+        if (q) params.append('search', q);
+        
+        const response = await fetch(`${API_BASE_URL}/api/audit/exploration/anomalies?${params.toString()}`);
+        const data = await response.json();
+        anomalies = data.anomalies;
+        renderAnomalyTable(anomalies);
+      } catch (error) {
+        console.error('Error applying filters:', error);
+      }
     }
-    function buildCaseTimeline() {
-      const events = [
-        { when:'T-5d', name:'Order Created', ev:['ORD-11'] },
-        { when:'T-4d', name:'Approval', ev:['APR-09'] },
-        { when:'T-2d', name:'Invoice Received', ev:['INV-501'] },
-        { when:'T-1d', name:'3-way Match', ev:['PO-184','GRN-07'] },
-        { when:'T', name:'Payment', ev:['PAY-508'] },
-      ];
-      const wrap = document.getElementById('caseTimeline');
-      wrap.innerHTML = '';
-      events.forEach((e,i)=>{
-        const block = document.createElement('div');
-        block.className = 'flex items-center gap-3';
-        block.innerHTML = `
-          <div class="text-xs text-steel-500 w-10">${e.when}</div>
-          <div class="flex items-center gap-3">
-            <div class="size-3 rounded-full ${i<events.length-1?'bg-emerald-400':'bg-warning'}"></div>
-            <button class="px-3 py-1.5 rounded-lg border border-steel-200 dark:border-steel-700 hover:bg-steel-50 dark:hover:bg-steel-700/40 text-sm">${e.name}</button>
-          </div>
-        `;
-        block.querySelector('button').onclick = ()=> openModal(e.name, `
-          <div class="text-sm mb-2">Evidence attachments</div>
-          <div class="flex flex-wrap gap-2">${e.ev.map(v=>`<span class="text-xs px-2 py-1 rounded-full bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300 border border-primary-100 dark:border-primary-800">${v}</span>`).join('')}</div>
-        `, `<button class="px-4 py-2.5 rounded-lg bg-primary-600 text-white" onclick="closeModal()">Close</button>`);
-        wrap.appendChild(block);
-      });
-    }
+
+
+    async function buildCaseTimeline() {
+  try {
+    // Get timeline for first anomaly or default case
+    const caseId = anomalies.length > 0 ? anomalies[0].id : 'TX-1001';
+    const response = await fetch(`${API_BASE_URL}/api/audit/exploration/timeline/${caseId}`);
+    const data = await response.json();
+    
+    const events = data.events || [];
+    const wrap = document.getElementById('caseTimeline');
+    wrap.innerHTML = '';
+    
+    events.forEach((e,i)=>{
+      const block = document.createElement('div');
+      block.className = 'flex items-center gap-3';
+      block.innerHTML = `
+        <div class="text-xs text-steel-500 w-10">${e.event_time}</div>
+        <div class="flex items-center gap-3">
+          <div class="size-3 rounded-full ${i<events.length-1?'bg-emerald-400':'bg-warning'}"></div>
+          <button class="px-3 py-1.5 rounded-lg border border-steel-200 dark:border-steel-700 hover:bg-steel-50 dark:hover:bg-steel-700/40 text-sm">${e.event_name}</button>
+        </div>
+      `;
+      block.querySelector('button').onclick = ()=> openModal(e.event_name, `
+        <div class="text-sm mb-2">Evidence attachments</div>
+        <div class="flex flex-wrap gap-2">${(e.evidence || []).map(v=>`<span class="text-xs px-2 py-1 rounded-full bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300 border border-primary-100 dark:border-primary-800">${v}</span>`).join('')}</div>
+      `, `<button class="px-4 py-2.5 rounded-lg bg-primary-600 text-white" onclick="closeModal()">Close</button>`);
+      wrap.appendChild(block);
+    });
+  } catch (error) {
+    console.error('Error building timeline:', error);
+  }
+}
+
+// Add button to trigger agent scan (add this to your HTML if needed)
+async function triggerAgentScan() {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/audit/exploration/generate`, { method: 'POST' });
+    const result = await response.json();
+    console.log('Agent scan result:', result);
+    // Reload anomalies
+    await loadAnomalies();
+    alert('Agent scan completed! Anomalies generated.');
+  } catch (error) {
+    console.error('Error triggering agent scan:', error);
+    alert('Error running agent scan');
+  }
+}
+
 
     // RISK & COMPLIANCE
     function renderRisk() {
