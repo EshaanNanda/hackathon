@@ -5,6 +5,21 @@ from services.report_generator import generate_executive_summary
 from supabase_client import supabase
 from models.schemas import DashboardResponse
 
+from services.audit_exploration_service import (
+    generate_anomalies_from_agents,
+    get_all_anomalies,
+    get_anomaly_detail,
+    get_case_timeline,
+    get_process_flows
+)
+from models.schemas import (
+    ExploreResponse,
+    ExplainAnomalyRequest,
+    ExplainAnomalyResponse,
+    Anomaly,
+    AnomalyDetail
+)
+
 router = APIRouter(prefix="/api/audit", tags=["Audit"])
 
 import asyncio
@@ -93,4 +108,82 @@ async def generate_report():
         report = await generate_executive_summary()
         return report
     except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/exploration/generate")
+async def generate_exploration_data():
+    """
+    Trigger agents to scan and generate anomalies
+    This calls all agents and populates the exploration data
+    """
+    try:
+        result = await generate_anomalies_from_agents()
+        return result
+    except Exception as e:
+        print(f"Error generating exploration data: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/exploration/anomalies")
+async def get_exploration_anomalies(
+    risk: str = None,
+    process: str = None,
+    status: str = None,
+    search: str = None
+):
+    """
+    Get all anomalies with optional filtering
+    Query params: risk, process, status, search
+    """
+    try:
+        filters = {}
+        if risk:
+            filters['risk'] = risk
+        if process:
+            filters['process'] = process
+        if status:
+            filters['status'] = status
+        if search:
+            filters['search'] = search
+        
+        anomalies = await get_all_anomalies(filters)
+        return {"anomalies": anomalies}
+    except Exception as e:
+        print(f"Error getting anomalies: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/exploration/anomaly/{anomaly_id}")
+async def get_anomaly_details(anomaly_id: str):
+    """Get detailed information about a specific anomaly"""
+    try:
+        anomaly = await get_anomaly_detail(anomaly_id)
+        if not anomaly:
+            raise HTTPException(status_code=404, detail="Anomaly not found")
+        return anomaly
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error getting anomaly detail: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/exploration/timeline/{case_id}")
+async def get_timeline(case_id: str):
+    """Get timeline events for a specific case"""
+    try:
+        timeline = await get_case_timeline(case_id)
+        return timeline
+    except Exception as e:
+        print(f"Error getting timeline: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/exploration/process-flows")
+async def get_flows():
+    """Get process flow visualizations"""
+    try:
+        flows = await get_process_flows()
+        return {"flows": flows}
+    except Exception as e:
+        print(f"Error getting process flows: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
