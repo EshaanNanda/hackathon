@@ -1,6 +1,9 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from routers import audit, assistant
+from routers import agents
+
 
 app = FastAPI(
     title="AutonomIQ Audit AI System",
@@ -17,9 +20,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Serve main HTML file
+@app.get("/")
+async def serve_frontend():
+    """Serve the main HTML file"""
+    return FileResponse("main1.html")
+
+@app.get("/main1.html")
+async def serve_frontend_alt():
+    """Alternative route for main1.html"""
+    return FileResponse("main1.html")
+
 # Include routers
 app.include_router(audit.router)
 app.include_router(assistant.router)
+app.include_router(agents.router)
 
 @app.get("/")
 async def root():
