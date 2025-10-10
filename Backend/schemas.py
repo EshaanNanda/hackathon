@@ -69,7 +69,7 @@ class VendorRead(BaseModel):
 
 class RFQCreate(BaseModel):
     req_id: UUID
-    vendor_id: UUID
+    vendor_ids: List[UUID]  # Changed to a list
     rfq_description: Optional[str] = None
 
 class QuoteCreate(BaseModel):

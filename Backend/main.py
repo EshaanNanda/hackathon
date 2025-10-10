@@ -1,467 +1,599 @@
-import os
-import uuid
-import random
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel, Field
-from typing import Optional, Dict, Any, List
-from dotenv import load_dotenv
-from supabase import create_client, Client
-import json
+'''from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from langchain_community.tools.tavily_search import TavilySearchResults
+from sqlalchemy.orm import Session, joinedload
+from uuid import UUID
+from typing import List
+import bcrypt
 
-from .agent import AgentHandler
-# --- Load Environment Variables ---
-from pathlib import Path
-dotenv_path = Path(__file__).parent / '.env'
-load_dotenv(dotenv_path=dotenv_path)
+from database import get_db, engine
+import models, schemas
+from auth_utils import router as auth_router  # Import the auth router
 
-# --- Supabase Client Initialization ---
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY")
-TAVILY_API_KEY = os.getenv("TAVILY_API_KEY")
+# Create tables
+models.Base.metadata.create_all(bind=engine)
 
+# Initialize app
+app = FastAPI(title="Procurement API")
 
-if not SUPABASE_URL or not SUPABASE_KEY:
-    raise Exception("Supabase URL and Key must be set in the .env file.")
-if not TAVILY_API_KEY:
-    raise Exception("Tavily API Key must be set in the .env file.")
-
-
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
-
-
-app = FastAPI(
-    title="Vendor Requirement Agent & Admin API",
-    description="API for handling user requirement gathering and admin management.",
-    version="7.0.0"
-)
-
-# --- CORS Middleware ---
+# Enable CORS
 app.add_middleware(
-    CORSMiddleware, allow_origins=["*"], allow_credentials=True,allow_methods=["*"],allow_headers=["*"],
+    CORSMiddleware,
+    allow_origins=["*", "null"], # Add "null" for local file testing
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
-# --- Pydantic Models ---
-# (All Pydantic models remain unchanged)
-class ConversationTurn(BaseModel): user_input: str; state: Optional[Dict[str, Any]] = None
-class AgentResponse(BaseModel): response: str; state: Dict[str, Any]; is_complete: bool; requirement_id: Optional[int] = None
-class RequirementRecord(BaseModel):
-    id: int; title: Optional[str] = None; status: str; initial_query: Optional[str] = None
-    extracted_requirements: Optional[Dict[str, Any]] = None; start_date: Optional[str] = None
-    end_date: Optional[str] = None; is_template: bool = False
-    ai_suggestions: Optional[List[str]] = None; finalized_items: Optional[List[str]] = None
-    winner_vendor_id: Optional[int] = None
-class RequirementSummary(BaseModel): id: int; title: Optional[str] = None; status: str; initial_query: Optional[str] = None
-class StatusUpdateRequest(BaseModel): status: str
-class ItemsUpdateRequest(BaseModel): items: List[str]
-class UserConfirmationRequest(BaseModel): action: str; comment: Optional[str] = None
-class VendorReview(BaseModel): rating: float; comment: str
-class VendorRecord(BaseModel): id: str; name: str; tags: List[str]; revenue: int; profile: int; rating: float; reviews: List[VendorReview]
-class RFQRequest(BaseModel): vendors: List[VendorRecord]
-class RFQInvitation(BaseModel): rfq_id: int; req_id: int; status: str; rfq: str; requirement_title: str; requirement_query: str
-class QuoteSubmitRequest(BaseModel): rfq_id: int; vendor_id: int; amount: float; items_covered: str
-class QuoteAnswersRequest(BaseModel): answers: Dict[str, str]
-class QuoteDetails(BaseModel):
-    quote_id: int; amount: Optional[float]; items_covered: Optional[str]; status: Optional[str]
-    answers: Optional[Dict[str, Any]]; relevance_score: Optional[int]; profile_score: Optional[int]
-    final_score: Optional[int]; is_shortlisted: bool = False
-    vendor_name: str; vendor_id: int
-class ShortlistRequest(BaseModel): top_n: int = Field(3, description="The number of top vendors to shortlist.")
-class WinnerRequest(BaseModel): vendor_id: int
-class ContractRequest(BaseModel):
-    requirement_id: int; vendor_id: int; contract_title: str
-    start_date: Optional[str] = None; amount: float
-    payment_terms: str; scope: str
+# Include authentication router
+app.include_router(auth_router)
 
-# Initialize our agent handler
-agent_handler = AgentHandler()
+# ---------------- REQUIREMENTS ----------------
 
-# --- USER-FACING ENDPOINTS ---
-@app.post("/requirements/converse", response_model=AgentResponse)
-async def handle_conversation_turn(turn: ConversationTurn):
-    try:
-        if turn.state is None: result_state = await agent_handler.run_first_turn(turn.user_input)
-        else: result_state = await agent_handler.run_next_turn(turn.state, turn.user_input)
-        
-        agent_message = agent_handler.get_agent_response(result_state)
-        is_complete = agent_handler.is_conversation_complete(result_state)
-        requirement_id = None
-        
-        if is_complete:
-            data_to_insert = {
-                "title": f"New Requirement for {result_state.get('category', 'Item')}",
-                "status": "Submitted",
-                "initial_query": result_state.get('initial_query', ''),
-                "extracted_requirements": result_state.get('extracted_requirements', {})
-            }
-            response = supabase.table('Requirement').insert(data_to_insert).execute()
-            if response.data: requirement_id = response.data[0]['id']
-            else: raise Exception("Failed to insert requirement.")
-            
-        return AgentResponse(response=agent_message, state=result_state, is_complete=is_complete, requirement_id=requirement_id)
-    except Exception as e: raise HTTPException(status_code=500, detail=str(e))
+@app.post("/requirements", response_model=schemas.RequirementRead)
+def create_requirement(r: schemas.RequirementCreate, db: Session = Depends(get_db)):
+    req = models.Requirement(
+        req_description=r.req_description,
+        start_date=r.start_date,
+        end_date=r.end_date
+    )
+    db.add(req)
+    db.commit()
+    db.refresh(req)
+    return req
 
-# --- ADMIN ENDPOINTS ---
-@app.get("/requirements", response_model=List[RequirementSummary])
-async def list_all_requirements():
-    try:
-        response = supabase.table('Requirement').select("id, title, status, initial_query").eq('is_template', False).order("created_at", desc=True).execute()
-        return response.data if response.data else []
-    except Exception as e: raise HTTPException(status_code=500, detail=f"Failed to fetch requirements: {e}")
 
-@app.get("/requirements/new", response_model=List[RequirementSummary])
-async def list_new_requirements():
-    try:
-        new_statuses = ["Submitted", "InReview", "UserConfirmed"]
-        response = supabase.table('Requirement').select("id, title, status, initial_query").in_("status", new_statuses).order("created_at", desc=True).execute()
-        return response.data if response.data else []
-    except Exception as e: raise HTTPException(status_code=500, detail=f"Failed to fetch new requirements: {e}")
+@app.get("/requirements", response_model=List[schemas.RequirementRead])
+def get_all_requirements(db: Session = Depends(get_db)):
+    return db.query(models.Requirement).order_by(models.Requirement.created_at.desc()).all()
 
-# --- REFACTORED ENDPOINT ---
-@app.post("/requirements/{requirement_id}/select-winner", response_model=RequirementRecord)
-async def select_winner(requirement_id: int, winner: WinnerRequest):
-    try:
-        # 1. Update the record
-        supabase.table('Requirement').update({
-            "winner_vendor_id": winner.vendor_id,
-            "status": "WinnerSelected"
-        }).eq("id", requirement_id).execute()
 
-        # 2. Re-fetch the updated record to return it
-        response = supabase.table('Requirement').select("*").eq("id", requirement_id).single().execute()
-        
-        if response.data: return response.data
-        raise HTTPException(status_code=404, detail="Requirement not found after update.")
-    except Exception as e: raise HTTPException(status_code=500, detail=f"Failed to select winner: {str(e)}")
+@app.get("/requirements/{req_id}", response_model=schemas.RequirementRead)
+def get_requirement(req_id: UUID, db: Session = Depends(get_db)):
+    req = db.query(models.Requirement).filter(models.Requirement.req_id == req_id).first()
+    if not req:
+        raise HTTPException(status_code=404, detail="Requirement not found")
+    return req
 
-@app.post("/contracts/send")
-async def send_contract(contract: ContractRequest):
-    # This endpoint's logic was already safe, no changes needed.
-    try:
-        contract_data = contract.dict()
-        insert_response = supabase.table('Contracts').insert(contract_data).select("*").single().execute()
-        if not insert_response.data: raise Exception("Failed to create the contract record.")
-        
-        supabase.table('Requirement').update({"status": "ContractSent"}).eq("id", contract.requirement_id).execute()
-        return {"message": "Contract created and sent successfully.", "contract": insert_response.data}
-    except Exception as e: raise HTTPException(status_code=500, detail=f"Failed to send contract: {str(e)}")
 
-# --- REFACTORED ENDPOINT ---
-@app.post("/requirements/{requirement_id}/validate", response_model=RequirementRecord)
-async def validate_requirement(requirement_id: int):
-    try:
-        req_response = supabase.table('Requirement').select("initial_query").eq("id", requirement_id).single().execute()
-        if not req_response.data: raise HTTPException(status_code=404, detail="Requirement not found.")
-        
-        initial_query = req_response.data['initial_query']
-        suggestions = await agent_handler.generate_suggestions(initial_query)
-        update_data = {"ai_suggestions": suggestions, "status": "InReview"}
-        
-        # 1. Update the record
-        supabase.table('Requirement').update(update_data).eq("id", requirement_id).execute()
+@app.patch("/requirements/{req_id}", response_model=schemas.RequirementRead)
+def update_requirement(req_id: UUID, update: schemas.RequirementUpdate, db: Session = Depends(get_db)):
+    req = db.query(models.Requirement).filter(models.Requirement.req_id == req_id).first()
+    if not req:
+        raise HTTPException(status_code=404, detail="Requirement not found")
 
-        # 2. Re-fetch the updated record
-        response = supabase.table('Requirement').select("*").eq("id", requirement_id).single().execute()
+    update_data = update.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(req, key, value)
 
-        if response.data: return response.data
-        raise Exception("Failed to fetch updated requirement.")
-    except Exception as e: raise HTTPException(status_code=500, detail=str(e))
+    db.commit()
+    db.refresh(req)
+    return req
 
-# --- REFACTORED ENDPOINT ---
-@app.patch("/requirements/{requirement_id}/items", response_model=RequirementRecord)
-async def update_finalized_items(requirement_id: int, items_update: ItemsUpdateRequest):
-    try:
-        # 1. Update the record
-        supabase.table('Requirement').update({"finalized_items": items_update.items}).eq("id", requirement_id).execute()
+# ---------------- VENDORS ----------------
 
-        # 2. Re-fetch the updated record
-        response = supabase.table('Requirement').select("*").eq("id", requirement_id).single().execute()
-        
-        if response.data: return response.data
-        raise HTTPException(status_code=404, detail="Not found or failed to update.")
-    except Exception as e: raise HTTPException(status_code=500, detail=str(e))
+@app.post("/vendors", status_code=201)
+def create_vendor(v: schemas.VendorCreate, db: Session = Depends(get_db)):
+    if db.query(models.Vendor).filter(models.Vendor.username == v.username).first():
+        raise HTTPException(status_code=400, detail="Username already registered")
 
-# --- REFACTORED ENDPOINT ---
-@app.patch("/requirements/{requirement_id}/status", response_model=RequirementRecord)
-async def update_requirement_status(requirement_id: int, status_update: StatusUpdateRequest):
-    try:
-        # 1. Update the record
-        supabase.table('Requirement').update({"status": status_update.status}).eq("id", requirement_id).execute()
+    hashed_pw = bcrypt.hashpw(v.password.encode('utf-8'), bcrypt.gensalt())
+    vendor = models.Vendor(
+        name=v.name,
+        username=v.username,
+        password=hashed_pw.decode('utf-8'),
+        tags=v.tags,
+        profile=v.profile
+    )
+    db.add(vendor)
+    db.commit()
+    db.refresh(vendor)
+    return {"vendor_id": str(vendor.vendor_id), "message": "Vendor registered"}
 
-        # 2. Re-fetch the updated record
-        response = supabase.table('Requirement').select("*").eq("id", requirement_id).single().execute()
 
-        if response.data: return response.data
-        raise HTTPException(status_code=404, detail="Not found or failed to update.")
-    except Exception as e: raise HTTPException(status_code=500, detail=str(e))
+@app.get("/vendors", response_model=List[schemas.VendorRead])
+def get_vendors(db: Session = Depends(get_db)):
+    return db.query(models.Vendor).all()
 
-# ... (Endpoints from here down were either safe or did not need changes) ...
+@app.post("/vendors/{vendor_id}/approve")
+def approve_vendor(vendor_id: UUID, db: Session = Depends(get_db)):
+    vendor = db.query(models.Vendor).filter(models.Vendor.vendor_id == vendor_id).first()
+    if not vendor:
+        raise HTTPException(404, "Vendor not found")
+    vendor.status = "approved"
+    db.commit()
+    return {"message": "Vendor approved"}
 
-@app.post("/requirements/{requirement_id}/search-vendors", response_model=List[VendorRecord])
-async def search_for_vendors(requirement_id: int):
-    try:
-        req_response = supabase.table('Requirement').select("*").eq("id", requirement_id).single().execute()
-        if not req_response.data: raise HTTPException(status_code=404, detail="Requirement not found.")
-        
-        record = req_response.data
-        items_str = ", ".join(record.get('finalized_items') or [])
-        query = f"Vendors or suppliers for '{record['initial_query']}' with items like '{items_str}' in India"
-        tavily_tool = TavilySearchResults(max_results=5); search_results = tavily_tool.invoke(query)
-        
-        vendor_list = [VendorRecord(id=f"v-api-{i+1}", name=res.get('title', 'Unnamed Vendor'), tags=[], revenue=random.randint(500000, 3000000), profile=random.randint(75, 95), rating=round(random.uniform(4.0, 5.0), 1), reviews=[VendorReview(rating=round(random.uniform(4.0, 5.0), 1), comment=res.get('content', '...'))]) for i, res in enumerate(search_results)]
-        return vendor_list
-    except Exception as e: raise HTTPException(status_code=500, detail=str(e))
+@app.post("/vendors/{vendor_id}/reject")
+def reject_vendor(vendor_id: UUID, db: Session = Depends(get_db)):
+    vendor = db.query(models.Vendor).filter(models.Vendor.vendor_id == vendor_id).first()
+    if not vendor:
+        raise HTTPException(404, "Vendor not found")
+    vendor.status = "rejected"
+    db.commit()
+    return {"message": "Vendor rejected"}
 
-@app.post("/requirements/{requirement_id}/send-rfq")
-async def send_request_for_quotes(requirement_id: int, rfq_request: RFQRequest):
-    try:
-        vendor_ids = []
-        for temp_vendor in rfq_request.vendors:
-            vendor_response = supabase.table('Vendor').select("vendor_id").eq("name", temp_vendor.name).execute()
-            
-            if vendor_response.data:
-                vendor_ids.append(vendor_response.data[0]['vendor_id'])
-            else:
-                # --- START OF FIX ---
-                # Added "tags": temp_vendor.tags to the new vendor data
-                new_vendor_data = {
-                    "name": temp_vendor.name, 
-                    "rating": temp_vendor.rating, 
-                    "role_id": 2,
-                    "tags": temp_vendor.tags  # <-- This line was added
-                }
-                # --- END OF FIX ---
-                
-                insert_response = supabase.table('Vendor').insert(new_vendor_data).execute()
-                
-                if insert_response.data:
-                    new_vendor_id = insert_response.data[0]['vendor_id']
-                    vendor_ids.append(new_vendor_id)
+# ---------------- RFQs ----------------
 
-        questionnaire = "Can you provide us with a detailed company profile...?\n..."
-        rfq_entries = [{"req_id": requirement_id, "vendor_id": vid, "rfq": questionnaire, "status": "Sent"} for vid in vendor_ids]
-        rfq_response = supabase.table('RFQ').insert(rfq_entries).execute()
-        
-        if not rfq_response.data:
-            raise Exception("Failed to create RFQ entries.")
-        
-        supabase.table('Requirement').update({"status": "RFQSent"}).eq("id", requirement_id).execute()
-        
-        return {"message": f"RFQ sent to {len(vendor_ids)} vendors successfully."}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+@app.post("/rfqs")
+def create_rfq(rfq_data: schemas.RFQCreate, db: Session = Depends(get_db)):
+    # This loop creates a separate RFQ entry for each vendor
+    rfq_records = []
+    for vendor_id in rfq_data.vendor_ids:
+        new_rfq = models.RFQ(
+            req_id=rfq_data.req_id,
+            vendor_id=vendor_id,
+            rfq_description=rfq_data.rfq_description
+        )
+        db.add(new_rfq)
+        rfq_records.append(new_rfq)
     
-@app.get("/requirements/{requirement_id}/quotes", response_model=List[QuoteDetails])
-async def get_quotes_for_requirement(requirement_id: int):
-    try:
-        response = supabase.rpc('get_quotes_for_requirement', {'req_id_param': requirement_id}).execute()
-        if response.data: return response.data
+    # Update the requirement's status to indicate RFQs have been sent
+    req = db.query(models.Requirement).filter(models.Requirement.req_id == rfq_data.req_id).first()
+    if req:
+        req.status = "RFQSent"
+    
+    # Commit all changes at once
+    db.commit()
+    
+    return {"message": "RFQs created and sent to vendors", "rfqs": [str(r.rfq_id) for r in rfq_records]}
+
+
+@app.get("/requirements/{req_id}/quotes", response_model=List[schemas.QuoteRead])
+def get_quotes_for_requirement(req_id: UUID, db: Session = Depends(get_db)):
+    quotes = db.query(models.Quote).join(models.RFQ).filter(
+        models.RFQ.req_id == req_id
+    ).options(joinedload(models.Quote.vendor)).all()
+    
+    if not quotes:
+        raise HTTPException(status_code=404, detail="No quotes found for this requirement")
+        
+    return quotes
+
+
+@app.post("/quotes", response_model=schemas.QuoteRead)
+def submit_quote(quote_data: schemas.QuoteCreate, db: Session = Depends(get_db)):
+    rfq = db.query(models.RFQ).filter(
+        models.RFQ.rfq_id == quote_data.rfq_id,
+        models.RFQ.vendor_id == quote_data.vendor_id
+    ).first()
+    if not rfq:
+        raise HTTPException(status_code=404, detail="RFQ not found for this vendor")
+
+    new_quote = models.Quote(
+        rfq_id=quote_data.rfq_id,
+        vendor_id=quote_data.vendor_id,
+        amount=quote_data.amount,
+        items_covered=quote_data.items_covered,
+        answers=quote_data.answers,
+        files=quote_data.files
+    )
+    db.add(new_quote)
+    db.commit()
+    db.refresh(new_quote)
+    
+    rfq.status = "QuoteReceived"
+    db.commit()
+
+    return new_quote
+
+
+@app.patch("/quotes/{quote_id}", response_model=schemas.QuoteRead)
+def update_quote(quote_id: UUID, update_data: schemas.QuoteUpdate, db: Session = Depends(get_db)):
+    quote = db.query(models.Quote).filter(models.Quote.quote_id == quote_id).first()
+    if not quote:
+        raise HTTPException(status_code=404, detail="Quote not found")
+        
+    for key, value in update_data.model_dump(exclude_unset=True).items():
+        setattr(quote, key, value)
+        
+    db.commit()
+    db.refresh(quote)
+    return quote
+
+
+@app.post("/contracts", response_model=schemas.ContractCreate)
+def create_contract(c: schemas.ContractCreate, db: Session = Depends(get_db)):
+    quote = db.query(models.Quote).get(c.quote_id)
+    if not quote:
+        raise HTTPException(404, "Quote not found")
+        
+    contract = models.Contract(
+        quote_id=c.quote_id,
+        req_id=c.req_id,
+        vendor_id=c.vendor_id,
+        title=c.title,
+        scope=c.scope,
+        amount=c.amount,
+        payment_terms=c.payment_terms
+    )
+    db.add(contract)
+    db.commit()
+    db.refresh(contract)
+    return contract '''
+
+from fastapi import FastAPI, Depends, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.orm import Session, joinedload
+from uuid import UUID
+from typing import List
+import bcrypt
+
+from database import get_db, engine
+import models, schemas
+from auth_utils import router as auth_router
+
+# Create tables
+models.Base.metadata.create_all(bind=engine)
+
+# Initialize app
+app = FastAPI(title="Procurement API")
+
+# Enable CORS - FIXED to allow file:// origins
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # In production, specify exact origins
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    expose_headers=["*"],
+)
+
+# Include authentication router
+app.include_router(auth_router)
+
+# ---------------- REQUIREMENTS ----------------
+
+@app.post("/requirements", response_model=schemas.RequirementRead)
+def create_requirement(r: schemas.RequirementCreate, db: Session = Depends(get_db)):
+    req = models.Requirement(
+        req_description=r.req_description,
+        start_date=r.start_date,
+        end_date=r.end_date
+    )
+    db.add(req)
+    db.commit()
+    db.refresh(req)
+    return req
+
+
+@app.get("/requirements", response_model=List[schemas.RequirementRead])
+def get_all_requirements(db: Session = Depends(get_db)):
+    return db.query(models.Requirement).order_by(models.Requirement.created_at.desc()).all()
+
+
+@app.get("/requirements/{req_id}", response_model=schemas.RequirementRead)
+def get_requirement(req_id: UUID, db: Session = Depends(get_db)):
+    req = db.query(models.Requirement).filter(models.Requirement.req_id == req_id).first()
+    if not req:
+        raise HTTPException(status_code=404, detail="Requirement not found")
+    return req
+
+
+@app.patch("/requirements/{req_id}", response_model=schemas.RequirementRead)
+def update_requirement(req_id: UUID, update: schemas.RequirementUpdate, db: Session = Depends(get_db)):
+    req = db.query(models.Requirement).filter(models.Requirement.req_id == req_id).first()
+    if not req:
+        raise HTTPException(status_code=404, detail="Requirement not found")
+
+    update_data = update.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(req, key, value)
+
+    db.commit()
+    db.refresh(req)
+    return req
+
+# ---------------- VENDORS ----------------
+@app.get("/vendors/by-username/{username}")
+def get_vendor_by_username(username: str, db: Session = Depends(get_db)):
+    vendor = db.query(models.Vendor).filter(
+        models.Vendor.username == username
+    ).first()
+    
+    if not vendor:
+        raise HTTPException(status_code=404, detail="Vendor not found")
+    
+    return {
+        "vendor_id": str(vendor.vendor_id),
+        "name": vendor.name,
+        "username": vendor.username,
+        "tags": vendor.tags,
+        "profile": vendor.profile,
+        "status": vendor.status,
+        "rating": vendor.rating,
+        "reviews": vendor.reviews
+    }
+@app.post("/vendors", status_code=201)
+def create_vendor(v: schemas.VendorCreate, db: Session = Depends(get_db)):
+    if db.query(models.Vendor).filter(models.Vendor.username == v.username).first():
+        raise HTTPException(status_code=400, detail="Username already registered")
+
+    hashed_pw = bcrypt.hashpw(v.password.encode('utf-8'), bcrypt.gensalt())
+    vendor = models.Vendor(
+        name=v.name,
+        username=v.username,
+        password=hashed_pw.decode('utf-8'),
+        tags=v.tags,
+        profile=v.profile
+    )
+    db.add(vendor)
+    db.commit()
+    db.refresh(vendor)
+    return {"vendor_id": str(vendor.vendor_id), "message": "Vendor registered"}
+
+
+@app.get("/vendors", response_model=List[schemas.VendorRead])
+def get_vendors(db: Session = Depends(get_db)):
+    return db.query(models.Vendor).all()
+
+@app.post("/vendors/{vendor_id}/approve")
+def approve_vendor(vendor_id: UUID, db: Session = Depends(get_db)):
+    vendor = db.query(models.Vendor).filter(models.Vendor.vendor_id == vendor_id).first()
+    if not vendor:
+        raise HTTPException(404, "Vendor not found")
+    vendor.status = "approved"
+    db.commit()
+    return {"message": "Vendor approved"}
+
+@app.post("/vendors/{vendor_id}/reject")
+def reject_vendor(vendor_id: UUID, db: Session = Depends(get_db)):
+    vendor = db.query(models.Vendor).filter(models.Vendor.vendor_id == vendor_id).first()
+    if not vendor:
+        raise HTTPException(404, "Vendor not found")
+    vendor.status = "rejected"
+    db.commit()
+    return {"message": "Vendor rejected"}
+
+# ---------------- RFQs ----------------
+
+@app.post("/rfqs")
+def create_rfq(rfq_data: schemas.RFQCreate, db: Session = Depends(get_db)):
+    # FIXED: Check if requirement exists in database
+    req = db.query(models.Requirement).filter(
+        models.Requirement.req_id == rfq_data.req_id
+    ).first()
+    
+    if not req:
+        # If requirement doesn't exist, create it first
+        # This handles the case where frontend generates UUID but doesn't create requirement
+        raise HTTPException(
+            status_code=404, 
+            detail=f"Requirement with ID {rfq_data.req_id} not found. Please create the requirement first."
+        )
+    
+    # Validate all vendors exist
+    rfq_records = []
+    for vendor_id in rfq_data.vendor_ids:
+        vendor = db.query(models.Vendor).filter(
+            models.Vendor.vendor_id == vendor_id
+        ).first()
+        
+        if not vendor:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Vendor with ID {vendor_id} not found"
+            )
+        
+        new_rfq = models.RFQ(
+            req_id=rfq_data.req_id,
+            vendor_id=vendor_id,
+            rfq_description=rfq_data.rfq_description
+        )
+        db.add(new_rfq)
+        rfq_records.append(new_rfq)
+    
+    # Update the requirement's status
+    req.status = "RFQSent"
+    
+    # Commit all changes at once
+    db.commit()
+    
+    return {
+        "message": "RFQs created and sent to vendors",
+        "rfqs": [{"rfq_id": str(r.rfq_id), "vendor_id": str(r.vendor_id)} for r in rfq_records]
+    }
+
+@app.get("/vendors/{vendor_id}/rfqs")
+def get_vendor_rfqs(vendor_id: UUID, db: Session = Depends(get_db)):
+    """Get all RFQs for a specific vendor"""
+    rfqs = db.query(models.RFQ).filter(
+        models.RFQ.vendor_id == vendor_id
+    ).all()
+    
+    if not rfqs:
         return []
-    except Exception as e: raise HTTPException(status_code=500, detail=f"Failed to fetch quotes: {str(e)}")
+    
+    # Enrich with requirement details
+    result = []
+    for rfq in rfqs:
+        requirement = db.query(models.Requirement).filter(
+            models.Requirement.req_id == rfq.req_id
+        ).first()
+        
+        # Check if quote already submitted
+        existing_quote = db.query(models.Quote).filter(
+            models.Quote.rfq_id == rfq.rfq_id,
+            models.Quote.vendor_id == vendor_id
+        ).first()
+        
+        result.append({
+            "rfq_id": str(rfq.rfq_id),
+            "req_id": str(rfq.req_id),
+            "vendor_id": str(rfq.vendor_id),
+            "rfq_description": rfq.rfq_description,
+            "status": rfq.status,
+            "created_at": rfq.created_at.isoformat() if rfq.created_at else None,
+            "requirement": {
+                "req_id": str(requirement.req_id),
+                "req_description": requirement.req_description,
+                "start_date": requirement.start_date.isoformat() if requirement.start_date else None,
+                "end_date": requirement.end_date.isoformat() if requirement.end_date else None,
+                "status": requirement.status,
+                "items": requirement.items or []
+            } if requirement else None,
+            "quote_submitted": existing_quote is not None,
+            "quote_id": str(existing_quote.quote_id) if existing_quote else None
+        })
+    
+    return result
 
-@app.post("/quotes/run-scoring/{requirement_id}", response_model=List[QuoteDetails])
-async def run_ai_scoring(requirement_id: int):
-    # This endpoint's logic was already safe, no changes needed.
-    try:
-        quotes_response = await get_quotes_for_requirement(requirement_id)
-        if not quotes_response: 
-            raise HTTPException(status_code=404, detail="No quotes found for this requirement.")
-        
-        req_response = supabase.table('Requirement').select("initial_query, finalized_items").eq("id", requirement_id).single().execute()
-        if not req_response.data: 
-            raise HTTPException(status_code=404, detail="Original requirement not found.")
-        
-        requirement_details = req_response.data
-        updates = []
-        for quote in quotes_response:
-            # --- START OF FIX ---
-            # 'quote' is already a dictionary, so we pass it directly without .dict()
-            scores = await agent_handler.score_vendor_quote(requirement_details, quote)
-            # --- END OF FIX ---
-            
-            # The 'quote_id' needs to be accessed like a dictionary key now
-            updates.append({
-                "quote_id": quote['quote_id'], 
-                "relevance_score": scores.get('relevance_score'), 
-                "profile_score": scores.get('profile_score'), 
-                "final_score": scores.get('final_score')
-            })
-        
-        for update in updates:
-            supabase.table('Quotes').update({k: v for k, v in update.items() if k != 'quote_id'}).eq('quote_id', update['quote_id']).execute()
-            
-        return await get_quotes_for_requirement(requirement_id)
-    except Exception as e: 
-        raise HTTPException(status_code=500, detail=f"Failed to run AI scoring: {str(e)}")
 
-@app.post("/requirements/{requirement_id}/shortlist", response_model=List[QuoteDetails])
-async def shortlist_top_vendors(requirement_id: int, request: ShortlistRequest):
-    try:
-        all_quotes = await get_quotes_for_requirement(requirement_id)
-        if not all_quotes:
-            raise HTTPException(status_code=404, detail="No quotes to shortlist.")
-        
-        # --- START OF FIX ---
-        # Changed q.final_score to q['final_score']
-        all_quotes.sort(key=lambda q: q['final_score'] or 0, reverse=True)
-        
-        # Changed q.quote_id to q['quote_id']
-        top_quote_ids = [q['quote_id'] for q in all_quotes[:request.top_n]]
-        
-        for quote in all_quotes:
-            # Changed quote.quote_id to quote['quote_id']
-            supabase.table('Quotes').update({
-                "is_shortlisted": quote['quote_id'] in top_quote_ids
-            }).eq("quote_id", quote['quote_id']).execute()
-        # --- END OF FIX ---
-            
-        supabase.table('Requirement').update({"status": "Shortlisted"}).eq("id", requirement_id).execute()
-        
-        return await get_quotes_for_requirement(requirement_id)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to shortlist vendors: {str(e)}")
+@app.get("/rfqs/{rfq_id}")
+def get_rfq_details(rfq_id: UUID, db: Session = Depends(get_db)):
+    """Get detailed RFQ information"""
+    rfq = db.query(models.RFQ).filter(models.RFQ.rfq_id == rfq_id).first()
+    if not rfq:
+        raise HTTPException(status_code=404, detail="RFQ not found")
+    
+    requirement = db.query(models.Requirement).filter(
+        models.Requirement.req_id == rfq.req_id
+    ).first()
+    
+    vendor = db.query(models.Vendor).filter(
+        models.Vendor.vendor_id == rfq.vendor_id
+    ).first()
+    
+    return {
+        "rfq_id": str(rfq.rfq_id),
+        "req_id": str(rfq.req_id),
+        "vendor_id": str(rfq.vendor_id),
+        "rfq_description": rfq.rfq_description,
+        "status": rfq.status,
+        "created_at": rfq.created_at.isoformat() if rfq.created_at else None,
+        "requirement": {
+            "req_id": str(requirement.req_id),
+            "req_description": requirement.req_description,
+            "start_date": requirement.start_date.isoformat() if requirement.start_date else None,
+            "end_date": requirement.end_date.isoformat() if requirement.end_date else None,
+            "status": requirement.status,
+            "items": requirement.items or []
+        } if requirement else None,
+        "vendor": {
+            "vendor_id": str(vendor.vendor_id),
+            "name": vendor.name
+        } if vendor else None
+    }
 
-@app.get("/rfqs/invitations/{vendor_id}", response_model=List[RFQInvitation])
-async def get_vendor_invitations(vendor_id: int):
-    try:
-        response = supabase.table('RFQ').select("*, Requirement(title, initial_query)").eq("vendor_id", vendor_id).eq("status", "Sent").execute()
-        invitations = []
-        if response.data:
-            for item in response.data:
-                req_details = item.get('Requirement', {})
-                invitations.append(RFQInvitation(rfq_id=item['rfq_id'], req_id=item['req_id'], status=item['status'], rfq=item['rfq'], requirement_title=req_details.get('title', 'N/A'), requirement_query=req_details.get('initial_query', 'N/A')))
-        return invitations
-    except Exception as e: raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/quotes/submit")
-async def submit_quote(quote_data: QuoteSubmitRequest):
-    try:
-        # 1. Prepare and perform the upsert operation
-        upsert_data = {
-            "rfq_id": quote_data.rfq_id, 
-            "vendor_id": quote_data.vendor_id, 
-            "amount": quote_data.amount, 
-            "items_covered": quote_data.items_covered, 
-            "status": "Submitted"
-        }
-        supabase.table('Quotes').upsert(upsert_data, on_conflict="rfq_id, vendor_id").execute()
-
-        # 2. Re-fetch the record you just upserted to return it
-        response = supabase.table('Quotes').select("*")\
-            .eq("rfq_id", quote_data.rfq_id)\
-            .eq("vendor_id", quote_data.vendor_id)\
-            .single().execute()
-
-        if response.data: 
-            return response.data
-            
-        raise Exception("Failed to submit or re-fetch quote.")
-    except Exception as e: 
-        raise HTTPException(status_code=500, detail=str(e))
-
-# --- REFACTORED ENDPOINT ---
-@app.patch("/quotes/{quote_id}/answers")
-async def submit_quote_answers(quote_id: int, answers_data: QuoteAnswersRequest):
-    try:
-        # 1. Update the Quotes table
-        supabase.table('Quotes').update({"answers": answers_data.answers}).eq("quote_id", quote_id).execute()
+def submit_quote_new(quote_data: schemas.QuoteCreate, db: Session = Depends(get_db)):
+    """Submit or update a quote for an RFQ"""
+    # Verify RFQ exists
+    rfq = db.query(models.RFQ).filter(
+        models.RFQ.rfq_id == quote_data.rfq_id,
+        models.RFQ.vendor_id == quote_data.vendor_id
+    ).first()
+    
+    if not rfq:
+        raise HTTPException(status_code=404, detail="RFQ not found for this vendor")
+    
+    # Check if quote already exists
+    existing_quote = db.query(models.Quote).filter(
+        models.Quote.rfq_id == quote_data.rfq_id,
+        models.Quote.vendor_id == quote_data.vendor_id
+    ).first()
+    
+    if existing_quote:
+        # Update existing quote
+        existing_quote.amount = quote_data.amount
+        existing_quote.items_covered = quote_data.items_covered
+        existing_quote.answers = quote_data.answers
+        existing_quote.files = quote_data.files
+        db.commit()
+        db.refresh(existing_quote)
         
-        # 2. Re-fetch the updated quote to get the rfq_id
-        quote_response = supabase.table('Quotes').select("rfq_id").eq("quote_id", quote_id).single().execute()
+        rfq.status = "QuoteReceived"
+        db.commit()
+        
+        return existing_quote
+    else:
+        # Create new quote
+        new_quote = models.Quote(
+            rfq_id=quote_data.rfq_id,
+            vendor_id=quote_data.vendor_id,
+            amount=quote_data.amount,
+            items_covered=quote_data.items_covered,
+            answers=quote_data.answers,
+            files=quote_data.files
+        )
+        db.add(new_quote)
+        db.commit()
+        db.refresh(new_quote)
+        
+        rfq.status = "QuoteReceived"
+        db.commit()
+        
+        return new_quote
+    
+@app.get("/requirements/{req_id}/quotes", response_model=List[schemas.QuoteRead])
+def get_quotes_for_requirement(req_id: UUID, db: Session = Depends(get_db)):
+    quotes = db.query(models.Quote).join(models.RFQ).filter(
+        models.RFQ.req_id == req_id
+    ).options(joinedload(models.Quote.vendor)).all()
+    
+    if not quotes:
+        raise HTTPException(status_code=404, detail="No quotes found for this requirement")
+        
+    return quotes
 
-        if quote_response.data:
-            # 3. Update the RFQ table status
-            supabase.table('RFQ').update({"status": "Responded"}).eq("rfq_id", quote_response.data['rfq_id']).execute()
-            
-            # 4. Fetch the full quote details again to return
-            full_response = supabase.table('Quotes').select("*").eq("quote_id", quote_id).single().execute()
-            if full_response.data:
-                return full_response.data
 
-        raise HTTPException(status_code=404, detail="Quote not found or failed to update.")
-    except Exception as e: raise HTTPException(status_code=500, detail=str(e))
+@app.post("/quotes", response_model=schemas.QuoteRead)
+def submit_quote(quote_data: schemas.QuoteCreate, db: Session = Depends(get_db)):
+    rfq = db.query(models.RFQ).filter(
+        models.RFQ.rfq_id == quote_data.rfq_id,
+        models.RFQ.vendor_id == quote_data.vendor_id
+    ).first()
+    if not rfq:
+        raise HTTPException(status_code=404, detail="RFQ not found for this vendor")
 
-@app.get("/requirements/templates", response_model=List[RequirementRecord])
-async def list_templates():
-    try:
-        response = supabase.table('Requirement').select("*").eq('is_template', True).execute()
-        return response.data if response.data else []
-    except Exception as e: raise HTTPException(status_code=500, detail=str(e))
+    new_quote = models.Quote(
+        rfq_id=quote_data.rfq_id,
+        vendor_id=quote_data.vendor_id,
+        amount=quote_data.amount,
+        items_covered=quote_data.items_covered,
+        answers=quote_data.answers,
+        files=quote_data.files
+    )
+    db.add(new_quote)
+    db.commit()
+    db.refresh(new_quote)
+    
+    rfq.status = "QuoteReceived"
+    db.commit()
 
-@app.post("/requirements/reuse/{template_id}", response_model=RequirementRecord)
-async def reuse_template(template_id: int):
-    try:
-        template_response = supabase.table('Requirement').select("*").eq("id", template_id).eq('is_template', True).single().execute()
-        if not template_response.data: raise HTTPException(status_code=404, detail="Template not found.")
-        
-        template = template_response.data
-        new_record_data = {"title": f"(Reused) {template['title']}", "status": "InReview", "initial_query": template['initial_query'], "extracted_requirements": template['extracted_requirements'], "is_template": False}
-        insert_response = supabase.table('Requirement').insert(new_record_data).select("*").single().execute()
-        
-        if insert_response.data: return insert_response.data
-        raise Exception("Failed to create from template.")
-    except Exception as e: raise HTTPException(status_code=500, detail=str(e))
-        
-@app.post("/requirements/blank", response_model=RequirementRecord)
-async def create_blank_request():
-    try:
-        new_record_data = {"title": "New Blank Request", "status": "InReview", "initial_query": "Admin-initiated request.", "is_template": False}
-        response = supabase.table('Requirement').insert(new_record_data).select("*").single().execute()
-        if response.data: return response.data
-        raise Exception("Failed to create blank request.")
-    except Exception as e: raise HTTPException(status_code=500, detail=str(e))
+    return new_quote
 
-# --- REFACTORED ENDPOINT (using the user's provided fix) ---
-@app.get("/requirements/{requirement_id}", response_model=RequirementRecord)
-async def get_requirement_details(requirement_id: int):
-    try:
-        response = supabase.table('Requirement').select("*, Vendor(name)").eq("id", requirement_id).maybe_single().execute()
-        if not response.data:
-            raise HTTPException(status_code=404, detail="Requirement not found")
-        
-        record = response.data
-        
-        if record.get('status') == 'Submitted':
-            # 1. Update the status
-            supabase.table('Requirement').update({"status": "InReview"}).eq("id", requirement_id).execute()
-            
-            # 2. Re-fetch the updated record
-            updated_response = supabase.table('Requirement').select("*, Vendor(name)").eq("id", requirement_id).single().execute()
-            
-            if updated_response.data:
-                record = updated_response.data
-        
-        return record
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
-# --- REFACTORED ENDPOINT ---
-@app.post("/requirements/{requirement_id}/confirm", response_model=RequirementRecord)
-async def handle_user_confirmation(requirement_id: int, confirmation: UserConfirmationRequest):
-    try:
-        req_response = supabase.table('Requirement').select("*").eq("id", requirement_id).single().execute()
-        if not req_response.data: raise HTTPException(status_code=404, detail="Requirement not found.")
+@app.patch("/quotes/{quote_id}", response_model=schemas.QuoteRead)
+def update_quote(quote_id: UUID, update_data: schemas.QuoteUpdate, db: Session = Depends(get_db)):
+    quote = db.query(models.Quote).filter(models.Quote.quote_id == quote_id).first()
+    if not quote:
+        raise HTTPException(status_code=404, detail="Quote not found")
         
-        record = req_response.data
-        if record['status'] != 'SentForUserConfirmation': raise HTTPException(status_code=400, detail="Requirement not awaiting confirmation.")
+    for key, value in update_data.model_dump(exclude_unset=True).items():
+        setattr(quote, key, value)
         
-        if confirmation.action == "approve":
-            update_data = {"status": "UserConfirmed"}
-        elif confirmation.action == "request_changes":
-            if not confirmation.comment: raise HTTPException(status_code=400, detail="Comment required for changes.")
-            new_initial_query = f"{record['initial_query']}\n\n--- User Requested Changes ---\n{confirmation.comment}"
-            update_data = {"status": "Submitted", "initial_query": new_initial_query}
-        else:
-            raise HTTPException(status_code=400, detail="Invalid action.")
-            
-        # 1. Update the record
-        supabase.table('Requirement').update(update_data).eq("id", requirement_id).execute()
+    db.commit()
+    db.refresh(quote)
+    return quote
 
-        # 2. Re-fetch the updated record
-        response = supabase.table('Requirement').select("*").eq("id", requirement_id).single().execute()
+
+@app.post("/contracts", response_model=schemas.ContractCreate)
+def create_contract(c: schemas.ContractCreate, db: Session = Depends(get_db)):
+    quote = db.query(models.Quote).get(c.quote_id)
+    if not quote:
+        raise HTTPException(404, "Quote not found")
         
-        if response.data: return response.data
-        raise Exception("Failed to update requirement.")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    contract = models.Contract(
+        quote_id=c.quote_id,
+        req_id=c.req_id,
+        vendor_id=c.vendor_id,
+        title=c.title,
+        scope=c.scope,
+        amount=c.amount,
+        payment_terms=c.payment_terms
+    )
+    db.add(contract)
+    db.commit()
+    db.refresh(contract)
+    return contract

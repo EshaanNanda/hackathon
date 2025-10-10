@@ -4,6 +4,7 @@ import sqlalchemy.sql as sa_sql
 from database import Base
 from sqlalchemy.types import TypeDecorator, CHAR
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
+from sqlalchemy.orm import relationship
 
 class GUID(TypeDecorator):
     """Platform-independent GUID type.
@@ -33,7 +34,6 @@ class Role(Base):
     __tablename__ = "roles"
     role_id = Column(UUID(as_uuid=True), primary_key=True, server_default=sa_sql.text("gen_random_uuid()"))
     role_name = Column(Text, nullable=False, unique=True)
-    description = Column(Text)
     created_at = Column(DateTime(timezone=True), server_default=sa_sql.func.now())
 
 class Requirement(Base):
@@ -45,8 +45,8 @@ class Requirement(Base):
     created_at = Column(DateTime(timezone=True), server_default=sa_sql.func.now())
     # New fields for workflow tracking
     status = Column(Text, server_default="Submitted")
-    items = Column(JSON, server_default=sa_sql.text("'[]'::jsonb")) # Finalized list of items
-    winner_vendor_id = Column(GUID(), ForeignKey("vendor.vendor_id"), nullable=True) # Selected vendor
+    items = Column(JSON, server_default=sa_sql.text("'[]'::jsonb"))
+    winner_vendor_id = Column(GUID(), ForeignKey("vendor.vendor_id"), nullable=True)
 
 class Vendor(Base):
     __tablename__ = "vendor"
@@ -58,7 +58,12 @@ class Vendor(Base):
     profile = Column(JSON, server_default=sa_sql.text("'{}'::jsonb"))
     rating = Column(Numeric)
     is_selected = Column(Boolean, default=False)
+    # ADDED: Status field for approve/reject functionality
+    status = Column(Text, server_default="pending")  # pending, approved, rejected
     created_at = Column(DateTime(timezone=True), server_default=sa_sql.func.now())
+    
+    # Relationships
+    quotes = relationship("Quote", back_populates="vendor")
 
 class RFQ(Base):
     __tablename__ = "rfq"
@@ -77,9 +82,12 @@ class Quote(Base):
     amount = Column(Numeric)
     items_covered = Column(Integer)
     answers = Column(JSON)
-    files = Column(JSON)   # e.g. [{"filename":"x.pdf","url":"..."}]
+    files = Column(JSON)
     submitted_at = Column(DateTime(timezone=True), server_default=sa_sql.func.now())
     status = Column(Text, server_default="Submitted")
+    
+    # Relationship
+    vendor = relationship("Vendor", back_populates="quotes")
 
 class Contract(Base):
     __tablename__ = "contracts"
