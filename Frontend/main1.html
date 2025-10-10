@@ -703,6 +703,7 @@
     const $ = (sel, ctx=document)=>ctx.querySelector(sel);
     // Init
     document.addEventListener('DOMContentLoaded', () => {
+      localStorage.clear();
       initTheme();
       buildNav();
       renderDashboard();
@@ -716,6 +717,18 @@
       wireBasics();
       // open dashboard by default
       navigate('dashboard');
+          // --- Your new login state initialization ---
+  const token = localStorage.getItem('token');
+  const role = localStorage.getItem('role');
+  if (token && role) {
+    store.role = role.charAt(0).toUpperCase() + role.slice(1);
+    if (role === 'vendor') {
+      const storedVendorId = localStorage.getItem('vendor_id');
+      if (storedVendorId) {
+        store.vendorPortal.activeVendorId = storedVendorId;
+      }  
+    }
+  }
     });
 
     function wireBasics() {
@@ -753,9 +766,10 @@
       const listM = document.getElementById('navListMobile');
       pages.forEach(p => {
         const li = document.createElement('li');
-        li.innerHTML = `<button class="${navClasses} ${p.id===currentPage?navActive:navInactive}" onclick="navigate('${p.id}')">
-          <span class="inline-flex items-center justify-center size-7 rounded-md border border-transparent ${p.id===currentPage?'bg-white/20 text-white':'bg-white dark:bg-steel-800 text-primary-600 dark:text-primary-300 border-steel-200 dark:border-steel-700'}">${p.icon}</span>
-          <span>${p.name}</span>
+        // Corrected code
+        li.innerHTML = `<button class="${navClasses} ${p.id===currentPage?navActive:navInactive}" onclick="navigate('${p.id}'); if('${p.id}' === 'vendors') { renderVendors(); }">
+            <span class="inline-flex items-center justify-center size-7 rounded-md border border-transparent ${p.id===currentPage?'bg-white/20 text-white':'bg-white dark:bg-steel-800 text-primary-600 dark:text-primary-300 border-steel-200 dark:border-steel-700'}">${p.icon}</span>
+            <span>${p.name}</span>
         </button>`;
         list.appendChild(li);
 
@@ -770,7 +784,14 @@
     function navigate(id) {
       currentPage = id;
       pages.forEach(p => {
-        document.getElementById('page-' + p.id).classList.toggle('hidden', p.id !== id);
+        const pageElement = document.getElementById('page-' + p.id);
+        const isHidden = p.id !== id;
+        pageElement.classList.toggle('hidden', isHidden);
+        
+        // When the vendors page becomes visible, render the login buttons
+        if (p.id === 'vendors' && !isHidden) {
+          renderVendors();
+        }
       });
       // Update title/icon
       const page = pages.find(x => x.id===id);
@@ -808,10 +829,10 @@
     function renderNotif() {
       const wrap = document.getElementById('notifList');
       wrap.innerHTML = '';
-      notifData.forEach(n=>{
-        const sevColor = n.sev==='High'?'bg-red-100 text-red-700': n.sev==='Medium'?'bg-yellow-100 text-yellow-700':'bg-green-100 text-green-700';
+      notifData.forEach(n => {
+        const sevColor = n.sev === 'High' ? 'bg-red-100 text-red-700' : n.sev === 'Medium' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700';
         const item = document.createElement('div');
-        item.className = 'p-3 hover:bg-steel-50 dark:hover:bg-steel-700/40';
+        item.className = 'p-3';
         item.innerHTML = `
           <div class="flex items-center justify-between">
             <div class="text-sm">${n.msg}</div>
@@ -820,27 +841,31 @@
           <div class="mt-1 flex items-center gap-2">
             <span class="text-[11px] px-1.5 py-0.5 rounded ${sevColor}">${n.sev}</span>
             <span class="text-[11px] px-1.5 py-0.5 rounded bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300">${n.agent}</span>
-            <div class="ml-auto flex items-center gap-1">${n.ch.map(c=>`<span class="text-[10px] px-1.5 py-0.5 rounded bg-steel-100 text-steel-700 dark:bg-steel-700 dark:text-steel-200">${c}</span>`).join('')}</div>
           </div>
         `;
         wrap.appendChild(item);
       });
     }
-
-    // DASHBOARD
+    
     function renderDashboard() {
       // Heatmap headers already present; add rows
       const processes = ['Procure-to-Pay','Order-to-Cash','Record-to-Report','IT Change','Asset Mgmt'];
       const levels = ['Very Low','Low','Moderate','Elevated','High','Severe'];
       const heatRows = document.getElementById('heatRows');
       heatRows.innerHTML = '';
-      processes.forEach((p,ri)=>{
+      processes.forEach((p) => {
         const row = document.createElement('div');
         row.className = 'grid grid-cols-7 gap-2 items-center';
-        row.innerHTML = `<div class="text-xs text-steel-600 dark:text-steel-300">${p}</div>`;
-        levels.forEach((l,ci)=>{
-          const riskScore = Math.round((Math.sin((ri+1)*(ci+1))+1)*50); // 0..100 demo
-          const color = riskScore>75?'bg-critical/80': riskScore>55?'bg-warning/80': riskScore>35?'bg-yellow-400/60':'bg-emerald-400/70';
+
+        // First cell: process name
+        const procCell = document.createElement('div');
+        procCell.className = 'text-xs text-slate-500';
+        procCell.textContent = p;
+        row.appendChild(procCell);
+
+        levels.forEach((l) => {
+          const riskScore = Math.floor(Math.random() * 100);
+          const color = riskScore > 80 ? 'bg-critical/80' : riskScore > 60 ? 'bg-warning/80' : riskScore > 40 ? 'bg-yellow-400/70' : 'bg-emerald-400/80';
           const cell = document.createElement('button');
           cell.className = `heat-cell transition shadow-soft text-xs text-white px-2 py-6 rounded-lg ${color}`;
           cell.textContent = riskScore;
@@ -850,6 +875,7 @@
           };
           row.appendChild(cell);
         });
+
         heatRows.appendChild(row);
       });
 
@@ -857,14 +883,14 @@
       const timeline = document.getElementById('timeline');
       timeline.innerHTML = '';
       const days = 14;
-      for (let i=0;i<days;i++) {
-        const val = Math.floor(Math.random()*10);
-        const sev = val>7?'critical': val>4?'warning':'compliant';
+      for (let i = 0; i < days; i++) {
+        const val = Math.floor(Math.random() * 10);
+        const sev = val > 7 ? 'critical' : val > 4 ? 'warning' : 'compliant';
         const bar = document.createElement('div');
-        bar.className = `w-6 rounded-t-md ${sev==='critical'?'bg-critical':sev==='warning'?'bg-warning':'bg-emerald-400'}`;
-        bar.style.height = `${10 + val*8}px`;
-        bar.title = `${days-i}d ago: ${val} anomalies`;
-        bar.onclick = ()=> document.getElementById('timelineInfo').textContent = `${val} anomalies detected ${days - i} days ago`;
+        bar.className = `w-6 rounded-t-md ${sev === 'critical' ? 'bg-critical' : sev === 'warning' ? 'bg-warning' : 'bg-emerald-400'}`;
+        bar.style.height = `${10 + val * 8}px`;
+        bar.title = `${days - i}d ago: ${val} anomalies`;
+        bar.onclick = () => document.getElementById('timelineInfo').textContent = `${val} anomalies detected ${days - i} days ago`;
         timeline.appendChild(bar);
       }
     }
@@ -1363,16 +1389,16 @@
       vendorPortal: { activeVendorId: 'v1' },
       feedbackDraft: { requestId: null, rating: 0 },
       vendors: [
-        { id: 'v1', name: 'Sonic Rentals', tags: ['audio','events'], revenue: 1200000, profile: 88, rating: 4.6, reviews: [{rating:5, comment:'Great sound quality and timely setup.'},{rating:4, comment:'Good service, minor delay in setup.'}], },
-        { id: 'v2', name: 'StageCraft AV', tags: ['audio','lighting','events'], revenue: 2200000, profile: 92, rating: 4.8, reviews: [{rating:5, comment:'Exceptional AV coordination.'},{rating:5, comment:'Professional team, flawless execution.'}] },
-        { id: 'v3', name: 'BlueWave Tech', tags: ['it','audio'], revenue: 800000, profile: 81, rating: 4.3, reviews: [{rating:4, comment:'Solid delivery, minor delays.'},{rating:4, comment:'Technical expertise is good.'}] },
-        { id: 'v4', name: 'EventHive', tags: ['events','decor','audio'], revenue: 1500000, profile: 85, rating: 4.5, reviews: [{rating:5, comment:'Professional crew and great value.'},{rating:4, comment:'Creative solutions, on time.'}] },
-        { id: 'v5', name: 'PrimeSound Co.', tags: ['audio'], revenue: 950000, profile: 79, rating: 4.1, reviews: [{rating:4, comment:'Good equipment, responsive team.'},{rating:4, comment:'Reliable but could improve communication.'}] },
+        { id: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', name: 'Sonic Rentals', tags: ['audio','events'], revenue: 1200000, profile: 88, rating: 4.6, reviews: [{rating:5, comment:'Great sound quality and timely setup.'},{rating:4, comment:'Good service, minor delay in setup.'}], },
+        { id: 'f47ac10b-58cc-4372-a567-0e02b2c3d479', name: 'StageCraft AV', tags: ['audio','lighting','events'], revenue: 2200000, profile: 92, rating: 4.8, reviews: [{rating:5, comment:'Exceptional AV coordination.'},{rating:5, comment:'Professional team, flawless execution.'}] },
+        { id: 'b5e1a2f6-3c4d-45e0-8b1a-2c4e5f7a8b9d', name: 'BlueWave Tech', tags: ['it','audio'], revenue: 800000, profile: 81, rating: 4.3, reviews: [{rating:4, comment:'Solid delivery, minor delays.'},{rating:4, comment:'Technical expertise is good.'}] },
+        { id: '5b7e8d35-8c7a-4c2d-9e1f-4a0b2c3d5f8e', name: 'EventHive', tags: ['events','decor','audio'], revenue: 1500000, profile: 85, rating: 4.5, reviews: [{rating:5, comment:'Professional crew and great value.'},{rating:4, comment:'Creative solutions, on time.'}] },
+        { id: '7c2d9e1f-4a0b-4b5c-9d6e-8a7f1a3b5c4d', name: 'PrimeSound Co.', tags: ['audio'], revenue: 950000, profile: 79, rating: 4.1, reviews: [{rating:4, comment:'Good equipment, responsive team.'},{rating:4, comment:'Reliable but could improve communication.'}] },
       ],
       requests: [
         // Past sample requests for history/reuse
         {
-          id: 'hist-101',
+          id: 'b5e1a2f6-3c4d-45e0-8b1a-2c4e5f7a8b9d',
           isTemplate: true,
           title: 'Small Event Audio Pack',
           text: 'Basic audio setup for a small corporate huddle.',
@@ -1390,8 +1416,11 @@
       ]
     };
 
-    // Utility to make unique IDs
-    const uid = (p='id') => `${p}-${Math.random().toString(36).slice(2,9)}`;
+    // Utility to make unique IDs in a valid UUID format
+    const uid = () => 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+      var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
 
     // ----------------------------
     // AI-like helpers (simple demo)
@@ -1469,8 +1498,33 @@
     // ----------------------------
     // Rendering core
     // ----------------------------
+     function selectAdminRequest(id) {
+      store.admin.currentRequestId = id;
+      store.admin.currentStep = 'Validate';
+      render();
+    }
+    
+    // Ensure admin can switch steps (Quotes, Vendors, Contract, etc.)
+    async function setAdminStep(step) {
+      store.admin.currentStep = step;
+      // If switching to Vendors, automatically run vendor search for the current request
+      // so the admin sees the available vendors without clicking "Search Vendors".
+      if (step === 'Vendors' && store.admin.currentRequestId) {
+        const rid = store.admin.currentRequestId;
+        const r = store.requests.find(x => x.id === rid);
+        try {
+          if (r && !r.vendorSearchDone) {
+            await searchVendors(rid);
+          }
+        } catch (err) {
+          console.error('Error auto-searching vendors for request', rid, err);
+        }
+      }
 
-    function renderVendors() {
+      // render() is async; await to ensure the UI updates after any fetches
+      await render();
+    }
+  function renderVendors() {
   const app = document.getElementById('app');
   app.innerHTML = `
     <div class="flex flex-col items-center justify-center h-[60vh] space-y-6">
@@ -1486,45 +1540,8 @@
 }
 
 // Simple modal-like login popup
-function openAuthModal() {
-  const app = document.getElementById('app');
-  app.innerHTML = `
-    <div class="flex flex-col items-center justify-center h-[70vh] space-y-4 p-6 border rounded-lg shadow-lg w-[400px] mx-auto bg-white">
-      <div class="flex justify-around w-full mb-4">
-        <button id="loginTab" class="tab-btn border-b-2 border-blue-500 font-semibold">Login</button>
-      </div>
-
-      <div id="loginForm">
-        <form id="loginFormElement" class="flex flex-col space-y-4">
-          <input type="email" placeholder="Email" id="loginEmail" required class="input-field border p-2 rounded"/>
-          <input type="password" placeholder="Password" id="loginPassword" required class="input-field border p-2 rounded"/>
-          <select id="loginRole" class="border p-2 rounded">
-            <option value="admin">Admin</option>
-            <option value="vendor">Vendor</option>
-            <option value="user">User</option>
-          </select>
-          <button type="submit" id="loginBtn" class="btn-primary bg-blue-500 text-white py-2 rounded hover:bg-blue-600">Login</button>
-        </form>
-      </div>
-    </div>
-  `;
-
-  // Tab switching
-  const loginTab = document.getElementById('loginTab');
-  const loginForm = document.getElementById('loginForm');
-  loginTab.addEventListener('click', () => {
-    loginForm.classList.remove('hidden');
-    loginTab.classList.add('border-b-2', 'border-blue-500', 'font-semibold');
-    loginTab.classList.remove('text-gray-500');
-  });
-
-  // Add event listener to login button
-  const loginFormElement = document.getElementById('loginFormElement');
-  loginFormElement.addEventListener('submit', handleLogin);
-}
-
 // ----------------------------
-// Login function
+// Fixed Login function
 // ----------------------------
 const API_BASE = "http://localhost:8000";
 
@@ -1533,46 +1550,178 @@ async function handleLogin(e) {
 
   const email = document.getElementById("loginEmail").value;
   const password = document.getElementById("loginPassword").value;
-  const selectedRole = document.getElementById("loginRole").value; // get selected role
+  const selectedRole = document.getElementById("loginRole").value.toLowerCase();
+
+  if (!email || !password || !selectedRole) {
+    alert("Please fill in all fields");
+    return;
+  }
 
   try {
     const response = await fetch(`${API_BASE}/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password, role: selectedRole }),
+      body: JSON.stringify({ 
+        email: email, 
+        password: password, 
+        role: selectedRole 
+      }),
     });
 
     const data = await response.json();
 
     if (!response.ok) {
-      alert("Login failed: " + data.detail);
+      alert(`Login failed: ${data.detail || 'Unknown error'}`);
       return;
     }
 
+    // Store authentication data
     localStorage.setItem("token", data.access_token);
     localStorage.setItem("role", data.role);
+    localStorage.setItem("email", data.email);
+    localStorage.setItem("user_id", data.user_id);
 
     alert(`Welcome ${data.role}!`);
 
-    // Redirect or switch UI based on the selected role
-    switch (selectedRole.toLowerCase()) {
-      case "admin":
-        setRole("Admin");   // switch to admin tab context
-        window.location.href = "admin_dashboard.html";
-        break;
-      case "vendor":
-        setRole("Vendor");  // switch to vendor tab context
-        window.location.href = "vendor_dashboard.html";
-        break;
-      case "user":
-      default:
-        setRole("User");    // switch to user tab context
-        window.location.href = "user_dashboard.html";
-        break;
+    // Update store role
+    store.role = data.role.charAt(0).toUpperCase() + data.role.slice(1);
+    
+    // FIXED: Set vendor ID properly for vendor login
+    if (data.role === "vendor") {
+      // For vendor, we need to fetch the actual vendor_id from the vendors table
+      await fetchAndSetVendorId(email);
     }
+    
+    // Navigate to the appropriate page
+    navigate('vendors');
+    await render();
+
   } catch (err) {
     console.error("Login error:", err);
-    alert("Unable to login. Please try again later.");
+    alert("Unable to login. Please check your connection and try again.");
+  }
+}
+
+// New function to fetch vendor ID from database
+async function fetchAndSetVendorId(username) {
+  try {
+    const response = await fetch(`${API_BASE}/vendors/by-username/${username}`, {
+      method: 'GET',
+      headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+    });
+
+    if (response.ok) {
+      const vendor = await response.json();
+      store.vendorPortal.activeVendorId = vendor.vendor_id;
+      localStorage.setItem('vendor_id', vendor.vendor_id);
+      console.log('Vendor ID set:', vendor.vendor_id);
+    } else if (response.status === 404) {
+      console.warn('Vendor not found, creating new vendor...');
+      const createRes = await fetch(`${API_BASE}/vendors`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({
+          name: username.split('@')[0],
+          username: username,
+          tags: ['general']
+        })
+      });
+      const newVendor = await createRes.json();
+      store.vendorPortal.activeVendorId = newVendor.vendor_id;
+      localStorage.setItem('vendor_id', newVendor.vendor_id);
+      console.log('✅ New vendor created and set:', newVendor.vendor_id);
+    } else {
+      console.error('Vendor fetch failed:', response.status);
+    }
+  } catch (err) {
+    console.error('Error in fetchAndSetVendorId:', err);
+  }
+}
+
+
+// ----------------------------
+// Updated openAuthModal function
+// ----------------------------
+function openAuthModal() {
+  const app = document.getElementById('app');
+  app.innerHTML = `
+    <div class="flex flex-col items-center justify-center h-[70vh] space-y-4 p-6 border rounded-lg shadow-lg w-[400px] mx-auto bg-white">
+      <h2 class="text-2xl font-bold text-slate-900 mb-4">Login to Continue</h2>
+
+      <form id="loginFormElement" class="flex flex-col space-y-4 w-full">
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Email</label>
+          <input 
+            type="email" 
+            placeholder="your@email.com" 
+            id="loginEmail" 
+            required 
+            class="w-full border border-slate-300 rounded-lg p-2 focus:ring-2 focus:ring-blue-500 outline-none"
+          />
+        </div>
+        
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Password</label>
+          <input 
+            type="password" 
+            placeholder="Enter password" 
+            id="loginPassword" 
+            required 
+            class="w-full border border-slate-300 rounded-lg p-2 focus:ring-2 focus:ring-blue-500 outline-none"
+          />
+        </div>
+        
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Login as</label>
+          <select 
+            id="loginRole" 
+            class="w-full border border-slate-300 rounded-lg p-2 focus:ring-2 focus:ring-blue-500 outline-none"
+          >
+            <option value="user">User</option>
+            <option value="admin">Admin</option>
+            <option value="vendor">Vendor</option>
+          </select>
+        </div>
+        
+        <button 
+          type="submit" 
+          class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 rounded-lg transition"
+        >
+          Login
+        </button>
+      </form>
+      
+      <div class="text-sm text-slate-600 text-center mt-4">
+        Don't have an account? Contact your administrator.
+      </div>
+    </div>
+  `;
+
+  // Add event listener to login form
+  const loginFormElement = document.getElementById('loginFormElement');
+  loginFormElement.addEventListener('submit', handleLogin);
+}
+
+// Update the initial renderVendors to show login
+function renderVendors() {
+  const token = localStorage.getItem('token');
+  
+  // If not logged in, show login modal
+  if (!token) {
+    openAuthModal();
+    return;
+  }
+  
+  // If logged in, verify token and render appropriate view
+  const role = localStorage.getItem('role');
+  if (role) {
+    store.role = role.charAt(0).toUpperCase() + role.slice(1);
+    render();
+  } else {
+    openAuthModal();
   }
 }
 
@@ -1758,39 +1907,137 @@ async function handleLogin(e) {
       alert(`Request: ${r.title || 'Requirement'}\nStatus: ${r.status}\n\n${r.text}`);
     }
 
-    function handleUserSubmit(e) {
-      e.preventDefault();
-      const text = document.getElementById('u_text').value.trim();
-      const date = document.getElementById('u_date').value;
-      const files = Array.from(document.getElementById('u_files').files || []).map(f => ({ name: f.name, size: f.size }));
-      if (!text) return;
+    // Fixed handleUserSubmit that creates requirement in database
+async function handleUserSubmit(e) {
+  e.preventDefault();
+  const text = document.getElementById('u_text').value.trim();
+  const date = document.getElementById('u_date').value;
+  const files = Array.from(document.getElementById('u_files').files || []).map(f => ({ name: f.name, size: f.size }));
+  
+  if (!text) return;
 
-      const id = uid('req');
-      store.requests.push({
-        id,
-        createdAt: Date.now(),
-        title: date ? `Requirement for ${new Date(date).toLocaleDateString()}` : 'New Requirement',
-        text,
-        files,
-        items: [],
-        suggestions: [],
-        status: 'Submitted',
-        questionnaires: ['Confirm availability date', 'Warranty/Support details', 'Delivery/Setup time'],
-        vendorsSelected: [],
-        quotes: [],
-        vendorSearchDone: false,
-        filterTag: null
-      });
+  try {
+    // Create requirement in database
+    const response = await fetch(`${API_BASE}/requirements`, {
+      method: 'POST',
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
+      },
+      body: JSON.stringify({
+        req_description: text,
+        start_date: date || null,
+        end_date: null
+      }),
+    });
 
-      // Clear form
-      document.getElementById('u_text').value = '';
-      document.getElementById('u_date').value = '';
-      document.getElementById('u_files').value = '';
-      document.getElementById('u_filelist').innerHTML = '';
-      render();
-      toast('Requirement submitted. Admin will review it shortly.');
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(`Failed to create requirement: ${errorData.detail || 'Unknown error'}`);
     }
 
+    const requirementData = await response.json();
+    console.log('Created requirement:', requirementData);
+
+    // Add to local store with database ID
+    store.requests.push({
+      id: requirementData.req_id, // Use database-generated UUID
+      createdAt: Date.now(),
+      title: date ? `Requirement for ${new Date(date).toLocaleDateString()}` : 'New Requirement',
+      text,
+      date,
+      files,
+      items: [],
+      suggestions: [],
+      status: 'Submitted',
+      questionnaires: ['Confirm availability date', 'Warranty/Support details', 'Delivery/Setup time'],
+      vendorsSelected: [],
+      quotes: [],
+      vendorSearchDone: false,
+      filterTag: null
+    });
+
+    // Clear form
+    document.getElementById('u_text').value = '';
+    document.getElementById('u_date').value = '';
+    document.getElementById('u_files').value = '';
+    document.getElementById('u_filelist').innerHTML = '';
+    
+    render();
+    toast('Requirement submitted successfully.');
+
+  } catch (error) {
+    console.error('Error submitting requirement:', error);
+    toast('Error: ' + error.message);
+  }
+}
+
+// Robust searchVendors: fetch vendors from DB, set loading state, populate store and request filtered list
+async function searchVendors(rid) {
+  const r = store.requests.find(x => x.id === rid);
+  if (!r) return;
+
+  try {
+    r.vendorSearchLoading = true;
+    // show immediate UI feedback
+    render();
+
+    // Fetch vendors from database
+    const response = await fetch(`${API_BASE}/vendors`, {
+      method: 'GET',
+      headers: { 
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
+      }
+    });
+
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to fetch vendors');
+    }
+
+    const vendors = await response.json();
+    console.log('Fetched vendors:', vendors);
+
+    // Update store.vendors with database data (canonical list)
+    store.vendors = vendors.map(v => ({
+      id: v.vendor_id,
+      vendor_id: v.vendor_id,
+      name: v.name,
+      tags: v.tags || [],
+      revenue: v.revenue || 1000000,
+      profile: v.profile || {},
+      rating: v.rating || 4.0,
+      reviews: v.reviews || []
+    }));
+
+    // Match vendors based on tags from requirement (if any)
+    const tags = extractTagsFromRequest(r);
+    const matches = vendors.filter(v => tags.length ? v.tags?.some(t => tags.includes(t)) : true);
+
+    r.filteredVendors = matches.map(v => ({
+      id: v.vendor_id,
+      name: v.name,
+      tags: v.tags || [],
+      revenue: v.revenue || 1000000,
+      profile: v.profile || {},
+      rating: v.rating || 4.0,
+      reviews: v.reviews || []
+    }));
+
+    r.vendorSearchDone = true;
+    r.vendorSearchLoading = false;
+    r.filterTag = null;
+
+    toast(`Found ${matches.length} vendor(s).`);
+    render();
+
+  } catch (error) {
+    r.vendorSearchLoading = false;
+    console.error('Error searching vendors:', error);
+    toast('Error: ' + error.message);
+    render();
+  }
+}
     function handleUserConfirmation(e, id) {
       e.preventDefault();
       const r = store.requests.find(x => x.id === id);
@@ -2344,93 +2591,134 @@ async function handleLogin(e) {
       `;
     }
 
-    // ----------------------------
-    // Vendor Role View
-    // ----------------------------
-    function renderVendor() {
-      const vendorId = store.vendorPortal.activeVendorId;
-      const me = store.vendors.find(v => v.id === vendorId);
-      const invitations = store.requests.filter(r => (r.vendorsSelected || []).includes(vendorId));
+ // Global variable to store vendor invitations 
+let vendorInvitations = []; 
 
-      return `
-        <section class="space-y-6">
-          <div class="bg-white/80 backdrop-blur rounded-2xl border border-white shadow-soft p-5">
-            <div class="flex items-center justify-between mb-3">
-              <div>
-                <div class="text-xs uppercase tracking-wider text-slate-500">Vendor Portal</div>
-                <div class="text-lg font-semibold text-slate-900">Welcome, ${me?.name}</div>
-              </div>
-              <div class="flex items-center gap-2">
-                <label class="text-xs text-slate-600">Impersonate:</label>
-                <select onchange="switchVendor(this.value)" class="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm focus:ring-2 focus:ring-brand-400 outline-none">
-                  ${store.vendors.map(v => `<option value="${v.id}" ${v.id===vendorId?'selected':''}>${v.name}</option>`).join('')}
-                </select>
-              </div>
-            </div>
-            <div class="text-sm text-slate-600">Submit quotes, answer questionnaires, and upload evidence.</div>
-          </div>
+// Load vendors from database into store
+async function loadVendorsFromDB() {
+  try {
+    const response = await fetch(`${API_BASE}/vendors`, {
+      method: 'GET',
+      headers: { 
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
+      }
+    });
 
-          <div class="bg-white/80 backdrop-blur rounded-2xl border border-white shadow-soft p-5">
-            <div class="flex items-center justify-between mb-3">
-              <h3 class="font-semibold text-slate-900">RFQ Invitations</h3>
-              <span class="text-xs text-slate-500">${invitations.length} open</span>
-            </div>
-            <div class="space-y-3">
-              ${invitations.length ? invitations.map(r => renderVendorInvitation(r, vendorId)).join('') : `
-                <div class="text-center text-slate-500 py-8">No invitations yet.</div>
-              `}
-            </div>
-          </div>
-        </section>
-      `;
+    if (response.ok) {
+      const vendors = await response.json();
+      console.log('Loaded vendors from DB:', vendors);
+      
+      // Update store.vendors with proper structure
+      store.vendors = vendors.map(v => ({
+        id: v.vendor_id,
+        vendor_id: v.vendor_id,
+        name: v.name,
+        username: v.username,
+        tags: v.tags || [],
+        revenue: 1000000,
+        profile: v.profile || {},
+        rating: v.rating || 4.0,
+        reviews: []
+      }));
     }
+  } catch (error) {
+    console.error('Error loading vendors:', error);
+  }
+}
 
-    function renderVendorInvitation(r, vendorId) {
-      const myQuote = (r.quotes || []).find(q => q.vendorId === vendorId);
-      const submitted = !!myQuote?.submittedAt;
-      return `
-        <div class="rounded-xl border border-slate-200 bg-white p-4">
-          <div class="flex items-center justify-between">
-            <div class="font-medium text-slate-900">${r.title || 'Requirement'}</div>
-            ${statusBadge(r.status)}
-          </div>
-          <div class="text-sm text-slate-600 mt-1 line-clamp-2">${r.text}</div>
-          <div class="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3">
-            <form onsubmit="submitQuote(event,'${r.id}','${vendorId}')" class="rounded-lg border border-slate-200 p-3 space-y-2">
-              <div class="text-xs font-medium text-slate-700">Submit Quote</div>
-              <div>
-                <label class="block text-xs text-slate-600 mb-1">Amount</label>
-                <input type="number" id="q_amount_${r.id}_${vendorId}" ${submitted?'disabled':''} placeholder="e.g. 5000" class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:ring-2 focus:ring-brand-400 outline-none">
-              </div>
-              <div>
-                <label class="block text-xs text-slate-600 mb-1">Items covered</label>
-                <input type="number" id="q_items_${r.id}_${vendorId}" ${submitted?'disabled':''} placeholder="How many of the requested items?" class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:ring-2 focus:ring-brand-400 outline-none">
-              </div>
-              <div>
-                <label class="block text-xs text-slate-600 mb-1">Upload evidence</label>
-                <input type="file" id="q_files_${r.id}_${vendorId}" ${submitted?'disabled':''} multiple class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:ring-2 focus:ring-brand-400 outline-none">
-              </div>
-              <button class="w-full rounded-lg ${submitted?'bg-slate-300':'bg-emerald-600 hover:bg-emerald-700'} text-white px-3 py-2 text-sm">${submitted?'Submitted':'Submit Quote'}</button>
-            </form>
+// Update switchVendor function
+async function switchVendor(vendorId) {
+  console.log('Switching to vendor:', vendorId);
+  store.vendorPortal.activeVendorId = vendorId;
+  localStorage.setItem('vendor_id', vendorId);
+  await renderVendor();
+}
 
-            <div class="rounded-lg border border-slate-200 p-3 space-y-2 md:col-span-2">
-              <div class="text-xs font-medium text-slate-700">Questionnaire</div>
-              ${(r.questionnaires || []).map(q => `
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-2 items-center">
-                  <div class="text-xs text-slate-600">${q}</div>
-                  <input type="text" id="ans_${r.id}_${vendorId}_${hashKey(q)}" ${submitted?'disabled':''} placeholder="Your answer..." class="md:col-span-2 rounded-lg border border-slate-200 px-3 py-2 text-sm focus:ring-2 focus:ring-brand-400 outline-none">
-                </div>
-              `).join('')}
-              <div class="flex justify-end">
-                <button onclick="submitAnswers('${r.id}','${vendorId}')" class="rounded-lg ${submitted?'bg-slate-300':'bg-accent-600 hover:bg-accent-700'} text-white px-3 py-1.5 text-sm">${submitted?'Answers Locked':'Submit Answers'}</button>
-              </div>
-              ${submitted ? `<div class="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-2 py-1 inline-block">Submission confirmed</div>` : ''}
-            </div>
+
+function renderVendorInvitation(rfq, vendorId) {
+  const requirement = rfq.requirement;
+  const submitted = rfq.quote_submitted;
+  const rfqId = rfq.rfq_id;
+  const reqId = rfq.req_id;
+  
+  // Format date
+  const startDate = requirement?.start_date ? new Date(requirement.start_date).toLocaleDateString() : 'Not specified';
+  
+  // Questionnaire questions
+  const questions = [
+    'Can you provide us with a detailed company profile, including your founding date, ownership structure, and key leadership biographies?',
+    'What is your financial standing? Are you profitable, and can you provide audited financial statements or credit reports for the last two years?',
+    'What are your security protocols and data protection measures?',
+    'What does your customer support model look like'
+  ];
+
+  return `
+    <div class="rounded-xl border border-slate-200 bg-white p-4">
+      <div class="flex items-center justify-between mb-2">
+        <div>
+          <div class="font-medium text-slate-900">Requirement for ${startDate}</div>
+          <div class="text-sm text-slate-600 mt-1">${requirement?.req_description || rfq.rfq_description}</div>
+        </div>
+        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${submitted ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : 'bg-amber-100 text-amber-800 border border-amber-200'}">
+          <span class="h-1.5 w-1.5 rounded-full ${submitted ? 'bg-emerald-500' : 'bg-amber-500'}"></span>
+          ${submitted ? 'RFQSent' : 'Pending'}
+        </span>
+      </div>
+      
+      ${requirement?.items && requirement.items.length > 0 ? `
+        <div class="mt-3 mb-4">
+          <div class="text-xs font-medium text-slate-700 mb-2">Required Items:</div>
+          <div class="flex flex-wrap gap-2">
+            ${requirement.items.map(item => `
+              <span class="inline-flex items-center gap-1 bg-emerald-50 text-emerald-900 border border-emerald-200 px-2 py-1 rounded-full text-xs">
+                <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>${item}
+              </span>
+            `).join('')}
           </div>
         </div>
-      `;
-    }
+      ` : ''}
+      
+      <div class="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3">
+        <!-- Submit Quote Section -->
+        <form onsubmit="submitQuote(event,'${rfqId}','${vendorId}')" class="rounded-lg border border-slate-200 p-3 space-y-2">
+          <div class="text-xs font-medium text-slate-700">Submit Quote</div>
+          <div>
+            <label class="block text-xs text-slate-600 mb-1">Amount ($)</label>
+            <input type="number" id="q_amount_${rfqId}_${vendorId}" ${submitted?'disabled':''} placeholder="e.g. 5000" required class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:ring-2 focus:ring-brand-400 outline-none">
+          </div>
+          <div>
+            <label class="block text-xs text-slate-600 mb-1">Items covered</label>
+            <input type="number" id="q_items_${rfqId}_${vendorId}" ${submitted?'disabled':''} placeholder="How many items?" required class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:ring-2 focus:ring-brand-400 outline-none">
+          </div>
+          <div>
+            <label class="block text-xs text-slate-600 mb-1">Upload evidence</label>
+            <input type="file" id="q_files_${rfqId}_${vendorId}" ${submitted?'disabled':''} multiple class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:ring-2 focus:ring-brand-400 outline-none">
+          </div>
+          <button type="submit" class="w-full rounded-lg ${submitted?'bg-slate-300 cursor-not-allowed':'bg-emerald-600 hover:bg-emerald-700'} text-white px-3 py-2 text-sm" ${submitted?'disabled':''}>
+            ${submitted?'Quote Submitted':'Submit Quote'}
+          </button>
+        </form>
 
+        <!-- Questionnaire Section -->
+        <div class="rounded-lg border border-slate-200 p-3 space-y-2 md:col-span-2">
+          <div class="text-xs font-medium text-slate-700">Questionnaire</div>
+          ${questions.map((q, idx) => `
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-2 items-start">
+              <div class="text-xs text-slate-600 md:col-span-1">${q}</div>
+              <input type="text" id="ans_${rfqId}_${vendorId}_${idx}" ${submitted?'disabled':''} placeholder="Your answer..." class="md:col-span-2 rounded-lg border border-slate-200 px-3 py-2 text-sm focus:ring-2 focus:ring-brand-400 outline-none">
+            </div>
+          `).join('')}
+          <div class="flex justify-end pt-2">
+            <button onclick="submitAnswers('${rfqId}','${vendorId}')" class="rounded-lg ${submitted?'bg-slate-300 cursor-not-allowed':'bg-accent-600 hover:bg-accent-700'} text-white px-3 py-1.5 text-sm" ${submitted?'disabled':''}>
+              ${submitted?'Answers Locked':'Submit Answers'}
+            </button>
+          </div>
+          ${submitted ? `<div class="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-2 py-1 inline-block">Submission confirmed</div>` : ''}
+        </div>
+      </div>
+    </div>
+  `;
+}
     function hashKey(s) {
       return btoa(unescape(encodeURIComponent(s))).replace(/=+$/,'').slice(0,10);
     }
@@ -2531,17 +2819,9 @@ async function handleLogin(e) {
       render();
     }
 
-    function searchVendors(rid) {
-      const r = store.requests.find(x => x.id === rid);
-      if (!r) return;
-      const tags = extractTagsFromRequest(r);
-      const matches = store.vendors.filter(v => tags.length ? v.tags.some(t => tags.includes(t)) : true);
-      r.filteredVendors = matches;
-      r.vendorSearchDone = true;
-      r.filterTag = null;
-      toast(`Found ${matches.length} vendor(s).`);
-      render();
-    }
+    // NOTE: The DB-backed async `searchVendors` implementation appears earlier in the file.
+    // The duplicate simple implementation was removed so the async version (which fetches
+    // vendors from the backend) is used when the Admin clicks "Search Vendors".
 
     function filterVendors(rid, tag) {
       const r = store.requests.find(x => x.id === rid);
@@ -2567,29 +2847,88 @@ async function handleLogin(e) {
       render();
     }
 
-    function sendRFQ(rid) {
-      const r = store.requests.find(x => x.id === rid);
-      if (!r) return;
-      if (!(r.vendorsSelected || []).length) return toast('Select vendors first.');
+   // ✅ Fixed sendRFQ function that ensures RFQs go only to selected vendors
+// ✅ Fixed sendRFQ function - sends RFQ only to selected vendors
+async function sendRFQ(rid) {
+  const r = store.requests.find(x => x.id === rid);
+  if (!r) {
+    toast('Request not found');
+    return;
+  }
 
-      // Use exactly the four required questions
-      r.questionnaires = [
-        'Can you provide us with a detailed company profile, including your founding date, ownership structure, and key leadership biographies?',
-        'What is your financial standing? Are you profitable, and can you provide audited financial statements or credit reports for the last two years?',
-        'What are your security protocols and data protection measures?',
-        'What does your customer support model look like'
-      ];
+  // STEP 1: Validate vendor selection
+  const selectedVendors = Array.isArray(r.vendorsSelected) 
+    ? r.vendorsSelected.filter(Boolean) 
+    : [];
 
-      r.status = 'RFQSent';
-      r.quotes = r.quotes || [];
-      r.vendorsSelected.forEach(vid => {
-        if (!r.quotes.find(q => q.vendorId === vid)) {
-          r.quotes.push({ id: uid('quote'), vendorId: vid, amount: null, itemsCovered: null, answers: {}, evidence: [] });
-        }
-      });
-      toast('RFQ sent with your 4 questions. Vendors will submit quotes in their portal.');
-      render();
+  if (selectedVendors.length === 0) {
+    toast('⚠️ Please select at least one vendor before sending the RFQ.');
+    return;
+  }
+
+  console.log('📦 Selected vendors for RFQ:', selectedVendors);
+
+  try {
+    // STEP 2: Check if requirement already exists in database
+    // The requirement ID should already be a valid database UUID
+    // because it was created when the user submitted it
+    const dbReqId = r.id;
+
+    // Verify the requirement exists in the database
+    const verifyResponse = await fetch(`${API_BASE}/requirements/${dbReqId}`, {
+      method: 'GET',
+      headers: { 
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
+      }
+    });
+
+    if (!verifyResponse.ok) {
+      throw new Error('Requirement not found in database. Please create it first.');
     }
+
+    console.log('✅ Requirement verified in database:', dbReqId);
+
+    // STEP 3: Send RFQs ONLY to selected vendors
+    console.log(`📤 Sending RFQ to ${selectedVendors.length} selected vendor(s)`);
+
+    const rfqResponse = await fetch(`${API_BASE}/rfqs`, {
+      method: 'POST',
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
+      },
+      body: JSON.stringify({ 
+        req_id: dbReqId,              // Use existing database requirement ID
+        vendor_ids: selectedVendors,  // ✅ Only selected vendors
+        rfq_description: r.text
+      }),
+    });
+
+    if (!rfqResponse.ok) {
+      const errorData = await rfqResponse.json();
+      throw new Error(`Failed to send RFQ: ${errorData.detail || JSON.stringify(errorData)}`);
+    }
+
+    const rfqData = await rfqResponse.json();
+    console.log('✅ RFQ Response:', rfqData);
+
+    // STEP 4: Update local store on success
+    r.status = 'RFQSent';
+    r.questionnaires = [
+      'Can you provide us with a detailed company profile, including your founding date, ownership structure, and key leadership biographies?',
+      'What is your financial standing? Are you profitable, and can you provide audited financial statements or credit reports for the last two years?',
+      'What are your security protocols and data protection measures?',
+      'What does your customer support model look like?'
+    ];
+
+    toast(`✅ RFQ sent successfully to ${selectedVendors.length} vendor(s)!`);
+    render();
+
+  } catch (error) {
+    console.error('❌ Error sending RFQ:', error);
+    toast('Error: ' + error.message);
+  }
+}
 
     function sendQuestionnaire(rid) {
       const r = store.requests.find(x => x.id === rid);
@@ -2655,47 +2994,164 @@ async function handleLogin(e) {
       toast('Service marked as delivered. User can now provide feedback.');
       render();
     }
-
     // ----------------------------
     // Actions (Vendor)
     // ----------------------------
+
+    
     function switchVendor(id) {
       store.vendorPortal.activeVendorId = id;
       render();
     }
 
-    function submitQuote(e, rid, vid) {
-      e.preventDefault();
-      const amount = parseFloat(document.getElementById(`q_amount_${rid}_${vid}`).value || '0');
-      const items = parseInt(document.getElementById(`q_items_${rid}_${vid}`).value || '0');
-      const files = Array.from(document.getElementById(`q_files_${rid}_${vid}`).files || []).map(f => ({ name: f.name, size: f.size }));
-      const r = store.requests.find(x => x.id === rid);
-      if (!r) return;
-      const q = (r.quotes || []).find(x => x.vendorId === vid);
-      if (!q) return;
-      q.amount = isNaN(amount) ? null : amount;
-      q.itemsCovered = isNaN(items) ? null : items;
-      q.evidence = files;
-      q.submittedAt = Date.now();
-      toast('Quote submitted.');
-      render();
+    // Fixed submitQuote function to work with database
+async function submitQuote(e, rfqId, vendorId) {
+  e.preventDefault();
+  
+  const amount = parseFloat(document.getElementById(`q_amount_${rfqId}_${vendorId}`).value || '0');
+  const items = parseInt(document.getElementById(`q_items_${rfqId}_${vendorId}`).value || '0');
+  const filesInput = document.getElementById(`q_files_${rfqId}_${vendorId}`);
+  const files = Array.from(filesInput?.files || []).map(f => ({ name: f.name, size: f.size }));
+
+  if (!amount || !items) {
+    toast('Please fill in all required fields');
+    return;
+  }
+
+  try {
+    const response = await fetch(`${API_BASE}/quotes/submit`, {
+      method: 'POST',
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
+      },
+      body: JSON.stringify({
+        rfq_id: rfqId,
+        vendor_id: vendorId,
+        amount: amount,
+        items_covered: items,
+        answers: {},  // Will be submitted separately
+        files: files
+      })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.detail || 'Failed to submit quote');
     }
 
-    function submitAnswers(rid, vid) {
-      const r = store.requests.find(x => x.id === rid);
-      if (!r) return;
-      const q = (r.quotes || []).find(x => x.vendorId === vid);
-      if (!q) return;
-      const answers = {};
-      (r.questionnaires || []).forEach(question => {
-        const el = document.getElementById(`ans_${r.id}_${vid}_${hashKey(question)}`);
-        if (el) answers[question] = el.value;
-      });
-      q.answers = answers;
-      toast('Answers submitted.');
-      render();
+    const result = await response.json();
+    console.log('Quote submitted:', result);
+
+    // Update local vendorInvitations (mark quote submitted and store quote id)
+    const invIdx = vendorInvitations.findIndex(inv => inv.rfq_id === rfqId && (inv.vendor?.vendor_id === vendorId || inv.vendor_id === vendorId));
+    if (invIdx !== -1) {
+      vendorInvitations[invIdx].quote_id = result.quote_id || result.quoteId || null;
+      vendorInvitations[invIdx].quote_submitted = true;
     }
 
+    // Also update admin-facing store.requests so Admin can see the quote immediately
+    // Find the related requirement id from the invitation (vendorInvitations contains req_id)
+    const reqId = (invIdx !== -1 && (vendorInvitations[invIdx].req_id || vendorInvitations[invIdx].requirement?.req_id)) ? (vendorInvitations[invIdx].req_id || vendorInvitations[invIdx].requirement?.req_id) : null;
+    if (reqId) {
+      const req = store.requests.find(r => r.id === reqId || r.id === (reqId.toString ? reqId.toString() : reqId));
+      if (req) {
+        req.quotes = req.quotes || [];
+        // Normalize quote shape to what admin expects
+        const qObj = {
+          quoteId: result.quote_id || result.quoteId || null,
+          vendorId: result.vendor_id || result.vendorId || vendorId,
+          amount: result.amount || result.price || 0,
+          itemsCovered: result.items_covered || result.itemsCovered || 0,
+          evidence: result.files || result.evidence || [],
+          answers: result.answers || {},
+          scores: null,
+          shortlisted: false
+        };
+        // Avoid duplicates: replace if same vendor exists
+        const existingIndex = req.quotes.findIndex(q => q.vendorId === qObj.vendorId);
+        if (existingIndex !== -1) req.quotes[existingIndex] = qObj; else req.quotes.push(qObj);
+        req.status = 'QuotesReceived';
+      }
+    }
+
+    toast('Quote submitted successfully!');
+    // Refresh the vendor and admin views
+    await renderVendor();
+    render();
+
+  } catch (error) {
+    console.error('Error submitting quote:', error);
+    toast('Error: ' + error.message);
+  }
+}
+
+// Fixed submitAnswers function
+async function submitAnswers(rfqId, vendorId) {
+  const questions = [
+    'Can you provide us with a detailed company profile, including your founding date, ownership structure, and key leadership biographies?',
+    'What is your financial standing? Are you profitable, and can you provide audited financial statements or credit reports for the last two years?',
+    'What are your security protocols and data protection measures?',
+    'What does your customer support model look like'
+  ];
+  
+  const answers = {};
+  questions.forEach((question, idx) => {
+    const el = document.getElementById(`ans_${rfqId}_${vendorId}_${idx}`);
+    if (el && el.value.trim()) {
+      answers[question] = el.value.trim();
+    }
+  });
+
+  if (Object.keys(answers).length === 0) {
+    toast('Please answer at least one question');
+    return;
+  }
+
+  try {
+    // Get existing quote first
+    const invitationIndex = vendorInvitations.findIndex(inv => inv.rfq_id === rfqId);
+    if (invitationIndex === -1 || !vendorInvitations[invitationIndex].quote_id) {
+      toast('Please submit a quote first before answering questionnaire');
+      return;
+    }
+
+    const quoteId = vendorInvitations[invitationIndex].quote_id;
+
+    // Update quote with answers
+    const response = await fetch(`${API_BASE}/quotes/${quoteId}`, {
+      method: 'PATCH',
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
+      },
+      body: JSON.stringify({
+        answers: answers
+      })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.detail || 'Failed to submit answers');
+    }
+
+    toast('Answers submitted successfully!');
+    
+    // Refresh the vendor view
+    await renderVendor();
+    render();
+
+  } catch (error) {
+    console.error('Error submitting answers:', error);
+    toast('Error: ' + error.message);
+  }
+}
+
+// Update switchVendor to refresh data
+function switchVendor(id) {
+  store.vendorPortal.activeVendorId = id;
+  render();
+}
     // ----------------------------
     // Feedback Modal Logic
     // ----------------------------
@@ -2770,14 +3226,21 @@ async function handleLogin(e) {
   `).join('');
 }
 
-    function render() {
+    async function render() {
       renderRoleTabs();
       const app = document.getElementById('app');
-      app.innerHTML = {
-        'User': renderUser(),
-        'Admin': renderAdmin(),
-        'Vendor': renderVendor(),
-      }[store.role];
+
+      // Only invoke the renderer for the active role. renderVendor is async
+      // and performs network calls, so await it and don't call it when
+      // another role is active. This prevents the Vendor UI (and RFQ
+      // invitations) from being rendered on User/Admin pages.
+      if (store.role === 'Vendor') {
+        await renderVendor();
+      } else if (store.role === 'Admin') {
+        app.innerHTML = renderAdmin();
+      } else {
+        app.innerHTML = renderUser();
+      }
     }
 
     // ----------------------------
