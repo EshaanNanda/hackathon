@@ -1,3 +1,75 @@
 <style>
 html just above script
 top few js functions in script 
+
+
+async function openAgentExplain(i) {
+  const a = agentDefs[i];
+  
+  // If Finance Auditor, get real explanation from backend
+  if (i === 0 && a.findings.length > 0) {
+    try {
+      showNotification('Generating explanation...', 'info');
+      
+      const finding = typeof a.findings[0] === 'string' ? a.findings[0] : a.findings[0].title;
+      
+      const response = await fetch(`${API_BASE_URL}/api/agents/finance/explain`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          finding_title: finding
+        })
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to get explanation');
+      }
+      
+      const data = await response.json();
+      
+      openModal('Finance Auditor Explanation', `
+        <div class="space-y-4">
+          <div class="flex items-center gap-3">
+            <div class="font-semibold">${a.name}</div>
+            <div class="text-xs px-2 py-1 rounded-full bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300 border border-primary-100 dark:border-primary-800">Confidence ${Math.round(a.conf*100)}%</div>
+          </div>
+          <div class="text-sm text-steel-700 dark:text-steel-200">Finding</div>
+          <div class="p-3 rounded-lg bg-steel-50 dark:bg-steel-900/40 border border-steel-100 dark:border-steel-700 text-sm font-semibold">
+            ${finding}
+          </div>
+          <div class="text-sm text-steel-700 dark:text-steel-200">AI Analysis</div>
+          <div class="p-3 rounded-lg bg-steel-50 dark:bg-steel-900/40 border border-steel-100 dark:border-steel-700 text-sm whitespace-pre-wrap">
+            ${data.explanation}
+          </div>
+        </div>
+      `, `<button class="px-4 py-2.5 rounded-lg bg-primary-600 text-white" onclick="closeModal()">Close</button>`);
+      
+    } catch (error) {
+      console.error('Error getting explanation:', error);
+      showError('Failed to generate explanation: ' + error.message);
+    }
+    
+  } else {
+    // Static explanation for other agents
+    openModal('Agent Explainability', `
+      <div class="space-y-4">
+        <div class="flex items-center gap-3">
+          <div class="font-semibold">${a.name}</div>
+          <div class="text-xs px-2 py-1 rounded-full bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300 border border-primary-100 dark:border-primary-800">Confidence ${Math.round(a.conf*100)}%</div>
+        </div>
+        <div class="text-sm text-steel-700 dark:text-steel-200">Reasoning</div>
+        <div class="p-3 rounded-lg bg-steel-50 dark:bg-steel-900/40 border border-steel-100 dark:border-steel-700 text-sm">
+          Based on pattern deviations across 90 days, with emphasis on seasonality-adjusted thresholds and peer benchmarking.
+        </div>
+        <div class="text-sm text-steel-700 dark:text-steel-200">Linked Evidence</div>
+        <ul class="text-sm list-disc pl-5 space-y-1">
+          <li>Audit Log Exports (ITSM Change-1234)</li>
+          <li>ERP Invoice Sample (INV-50811)</li>
+          <li>Supplier Onboarding Checklist (DPIA-42)</li>
+        </ul>
+      </div>
+    `, `<button class="px-4 py-2.5 rounded-lg bg-primary-600 text-white" onclick="closeModal()">Close</button>`);
+  }
+}
