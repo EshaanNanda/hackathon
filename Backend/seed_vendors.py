@@ -15,8 +15,8 @@ def seed_vendors():
     vendors_data = [
         {
             'vendor_id': UUID('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'),
-            'name': 'Sonic Rentals',
-            'username': 'sonic_rentals',
+            'name': 'sonicrentals',
+            'username': 'sonicrentals@test.com',
             'password': 'vendor123',
             'tags': ['audio', 'events'],
             'profile': {'revenue': 1200000, 'profile_score': 88},
@@ -24,7 +24,7 @@ def seed_vendors():
         },
         {
             'vendor_id': UUID('f47ac10b-58cc-4372-a567-0e02b2c3d479'),
-            'name': 'StageCraft AV',
+            'name': 'stagecraft_av@test.com',
             'username': 'stagecraft_av',
             'password': 'vendor123',
             'tags': ['audio', 'lighting', 'events'],
