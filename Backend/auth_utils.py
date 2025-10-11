@@ -24,6 +24,10 @@ user_cache = {
     "user@test.com": {"password": "user123", "role": "user"},
     "vendor@test.com": {"password": "vendor123", "role": "vendor"},
     "vendor": {"password": "vendor123", "role": "vendor"},  # add username based for vendor demo
+    "sonicrentals@test.com" : {"password": "vendor123", "role": "vendor"},
+    "stagecraftav@test.com" : {"password": "vendor123", "role": "vendor"},
+    "bluewavetech@test.com" : {"password": "vendor123", "role": "vendor"},
+    "eventhive@test.com" : {"password": "vendor123", "role": "vendor"}
 }
 
 # Utility for cache or DB password check
