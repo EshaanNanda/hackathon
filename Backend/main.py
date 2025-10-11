@@ -221,6 +221,7 @@ import bcrypt
 from database import get_db, engine
 import models, schemas
 from auth_utils import router as auth_router
+from fastapi import Query
 
 # Create tables
 models.Base.metadata.create_all(bind=engine)
@@ -284,25 +285,35 @@ def update_requirement(req_id: UUID, update: schemas.RequirementUpdate, db: Sess
     return req
 
 # ---------------- VENDORS ----------------
+from sqlalchemy import or_
+
+# Replace the /vendors/by-username endpoint in your main.py with this:
+from sqlalchemy import or_
+
 @app.get("/vendors/by-username/{username}")
 def get_vendor_by_username(username: str, db: Session = Depends(get_db)):
+    """Get vendor by username or email"""
     vendor = db.query(models.Vendor).filter(
-        models.Vendor.username == username
+        or_(
+            models.Vendor.username == username,
+            models.Vendor.name == username  # Also check by name
+        )
     ).first()
-    
+
     if not vendor:
-        raise HTTPException(status_code=404, detail="Vendor not found")
-    
+        raise HTTPException(status_code=404, detail=f"Vendor not found with identifier: {username}")
+
     return {
         "vendor_id": str(vendor.vendor_id),
-        "name": vendor.name,
+        "name": vendor.name or username.split('@')[0],
         "username": vendor.username,
-        "tags": vendor.tags,
-        "profile": vendor.profile,
-        "status": vendor.status,
-        "rating": vendor.rating,
-        "reviews": vendor.reviews
+        "tags": vendor.tags if vendor.tags else [],
+        "profile": vendor.profile if vendor.profile else {},
+        "status": vendor.status or "pending",
+        "rating": float(vendor.rating) if vendor.rating else 4.0,
+        "reviews": []  # Add reviews logic if you have a reviews table
     }
+
 @app.post("/vendors", status_code=201)
 def create_vendor(v: schemas.VendorCreate, db: Session = Depends(get_db)):
     if db.query(models.Vendor).filter(models.Vendor.username == v.username).first():
@@ -325,6 +336,40 @@ def create_vendor(v: schemas.VendorCreate, db: Session = Depends(get_db)):
 @app.get("/vendors", response_model=List[schemas.VendorRead])
 def get_vendors(db: Session = Depends(get_db)):
     return db.query(models.Vendor).all()
+# Add this temporary endpoint to your main.py for testing:
+
+@app.post("/vendors/create-test")
+def create_test_vendor(db: Session = Depends(get_db)):
+    """Create test vendor for development"""
+    import bcrypt
+    
+    # Check if vendor already exists
+    existing = db.query(models.Vendor).filter(
+        models.Vendor.username == "sonic_rentals"
+    ).first()
+    
+    if existing:
+        return {"message": "Test vendor already exists", "vendor_id": str(existing.vendor_id)}
+    
+    hashed_pw = bcrypt.hashpw("password123".encode('utf-8'), bcrypt.gensalt())
+    vendor = models.Vendor(
+        name="Sonic Rentals",
+        username="sonic_rentals",
+        password=hashed_pw.decode('utf-8'),
+        tags=["audio", "events"],
+        profile={"description": "Professional audio rental services"},
+        status="approved",
+        rating=4.6
+    )
+    db.add(vendor)
+    db.commit()
+    db.refresh(vendor)
+    
+    return {
+        "message": "Test vendor created",
+        "vendor_id": str(vendor.vendor_id),
+        "username": vendor.username
+    }
 
 @app.post("/vendors/{vendor_id}/approve")
 def approve_vendor(vendor_id: UUID, db: Session = Depends(get_db)):
