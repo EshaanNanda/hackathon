@@ -1,0 +1,175 @@
+-- WARNING: This schema is for context only and is not meant to be run.
+-- Table order and constraints may not be valid for execution.
+
+CREATE TABLE public.Contracts (
+  contract_id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  created_at timestamp with time zone NOT NULL,
+  requirement_id bigint,
+  vendor_id bigint,
+  contract_title text,
+  start_date date,
+  amount numeric,
+  payment_terms text,
+  scope text,
+  status text DEFAULT 'Draft'::text,
+  CONSTRAINT Contracts_pkey PRIMARY KEY (contract_id),
+  CONSTRAINT Contracts_requirement_id_fkey FOREIGN KEY (requirement_id) REFERENCES public.Requirement(id),
+  CONSTRAINT Contracts_vendor_id_fkey FOREIGN KEY (vendor_id) REFERENCES public.Vendor(vendor_id)
+);
+CREATE TABLE public.Quotes (
+  quote_id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  submitted_at timestamp with time zone NOT NULL DEFAULT now(),
+  rfq_id bigint,
+  vendor_id bigint,
+  amount numeric,
+  items_covered text,
+  answers jsonb,
+  status text,
+  relevance_score numeric,
+  profile_score numeric,
+  final_score numeric,
+  is_shortlisted boolean,
+  CONSTRAINT Quotes_pkey PRIMARY KEY (quote_id),
+  CONSTRAINT Quotes_rfq_id_fkey FOREIGN KEY (rfq_id) REFERENCES public.RFQ(rfq_id),
+  CONSTRAINT Quotes_vendor_id_fkey FOREIGN KEY (vendor_id) REFERENCES public.Vendor(vendor_id)
+);
+CREATE TABLE public.RFQ (
+  rfq_id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  req_id bigint,
+  vendor_id bigint,
+  rfq text,
+  status text,
+  CONSTRAINT RFQ_pkey PRIMARY KEY (rfq_id),
+  CONSTRAINT RFQ_req_id_fkey FOREIGN KEY (req_id) REFERENCES public.Requirement(id),
+  CONSTRAINT RFQ_vendor_id_fkey FOREIGN KEY (vendor_id) REFERENCES public.Vendor(vendor_id)
+);
+CREATE TABLE public.Requirement (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  start_date date,
+  end_date date,
+  created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
+  initial_query text,
+  title text,
+  status text NOT NULL,
+  extracted_requirements jsonb,
+  is_template boolean DEFAULT false,
+  ai_suggestions jsonb,
+  finalized_items jsonb,
+  winner_vendor_id bigint,
+  CONSTRAINT Requirement_pkey PRIMARY KEY (id),
+  CONSTRAINT Requirement_winner_vendor_id_fkey FOREIGN KEY (winner_vendor_id) REFERENCES public.Vendor(vendor_id)
+);
+CREATE TABLE public.Role (
+  rolee_id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  role_name character varying NOT NULL UNIQUE,
+  CONSTRAINT Role_pkey PRIMARY KEY (rolee_id)
+);
+CREATE TABLE public.Vendor (
+  vendor_id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  name text DEFAULT ''::text,
+  username text,
+  password text,
+  tags ARRAY NOT NULL,
+  profile jsonb,
+  rating numeric,
+  is_selected boolean,
+  role_id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  CONSTRAINT Vendor_pkey PRIMARY KEY (vendor_id),
+  CONSTRAINT Vendor_role_id_fkey FOREIGN KEY (role_id) REFERENCES public.Role(rolee_id)
+);
+CREATE TABLE public.contracts (
+  contract_id uuid NOT NULL DEFAULT gen_random_uuid(),
+  quote_id uuid,
+  req_id uuid,
+  vendor_id uuid,
+  title text,
+  scope text,
+  amount numeric,
+  payment_terms text,
+  sent_at timestamp with time zone DEFAULT now(),
+  signed_at timestamp with time zone,
+  CONSTRAINT contracts_pkey PRIMARY KEY (contract_id),
+  CONSTRAINT contracts_quote_id_fkey FOREIGN KEY (quote_id) REFERENCES public.quotes(quote_id),
+  CONSTRAINT contracts_req_id_fkey FOREIGN KEY (req_id) REFERENCES public.requirement(req_id),
+  CONSTRAINT contracts_vendor_id_fkey FOREIGN KEY (vendor_id) REFERENCES public.vendor(vendor_id)
+);
+CREATE TABLE public.quotes (
+  quote_id uuid NOT NULL DEFAULT gen_random_uuid(),
+  rfq_id uuid,
+  vendor_id uuid,
+  amount numeric,
+  items_covered integer,
+  answers json,
+  files json,
+  submitted_at timestamp with time zone DEFAULT now(),
+  status text DEFAULT 'Submitted'::text,
+  CONSTRAINT quotes_pkey PRIMARY KEY (quote_id),
+  CONSTRAINT quotes_rfq_id_fkey FOREIGN KEY (rfq_id) REFERENCES public.rfq(rfq_id),
+  CONSTRAINT quotes_vendor_id_fkey FOREIGN KEY (vendor_id) REFERENCES public.vendor(vendor_id)
+);
+CREATE TABLE public.requirement (
+  req_id uuid NOT NULL DEFAULT gen_random_uuid(),
+  req_description text NOT NULL,
+  start_date date,
+  end_date date,
+  created_at timestamp with time zone DEFAULT now(),
+  status text DEFAULT 'Submitted'::text,
+  items json DEFAULT '[]'::jsonb,
+  winner_vendor_id uuid,
+  CONSTRAINT requirement_pkey PRIMARY KEY (req_id),
+  CONSTRAINT requirement_winner_vendor_id_fkey FOREIGN KEY (winner_vendor_id) REFERENCES public.vendor(vendor_id)
+);
+CREATE TABLE public.rfq (
+  rfq_id uuid NOT NULL DEFAULT gen_random_uuid(),
+  req_id uuid,
+  vendor_id uuid,
+  rfq_description text,
+  status text DEFAULT 'Pending'::text,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT rfq_pkey PRIMARY KEY (rfq_id),
+  CONSTRAINT rfq_req_id_fkey FOREIGN KEY (req_id) REFERENCES public.requirement(req_id),
+  CONSTRAINT rfq_vendor_id_fkey FOREIGN KEY (vendor_id) REFERENCES public.vendor(vendor_id)
+);
+CREATE TABLE public.roles (
+  role_id uuid NOT NULL DEFAULT gen_random_uuid(),
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  role_name character varying NOT NULL,
+  CONSTRAINT roles_pkey PRIMARY KEY (role_id)
+);
+CREATE TABLE public.user (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  email text NOT NULL UNIQUE,
+  full_name text NOT NULL,
+  role_id uuid NOT NULL DEFAULT gen_random_uuid(),
+  is_active boolean,
+  CONSTRAINT user_pkey PRIMARY KEY (id),
+  CONSTRAINT user_role_id_fkey FOREIGN KEY (role_id) REFERENCES public.roles(role_id)
+);
+CREATE TABLE public.users (
+  user_id uuid NOT NULL DEFAULT gen_random_uuid(),
+  full_name text NOT NULL,
+  username text NOT NULL UNIQUE,
+  email text NOT NULL UNIQUE,
+  password text NOT NULL,
+  role_id uuid,
+  profile json DEFAULT '{}'::jsonb,
+  created_at timestamp with time zone DEFAULT now(),
+  is_active boolean,
+  CONSTRAINT users_pkey PRIMARY KEY (user_id),
+  CONSTRAINT users_role_id_fkey FOREIGN KEY (role_id) REFERENCES public.roles(role_id)
+);
+CREATE TABLE public.vendor (
+  vendor_id uuid NOT NULL DEFAULT gen_random_uuid(),
+  name text NOT NULL,
+  username text NOT NULL UNIQUE,
+  password text NOT NULL,
+  tags json DEFAULT '[]'::jsonb,
+  profile json DEFAULT '{}'::jsonb,
+  rating numeric,
+  is_selected boolean,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT vendor_pkey PRIMARY KEY (vendor_id)
+);
