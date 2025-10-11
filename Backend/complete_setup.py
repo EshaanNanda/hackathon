@@ -37,6 +37,12 @@ def add_status_column_if_missing():
     finally:
         db.close()
 
+from uuid import UUID
+import bcrypt
+import models
+from database import SessionLocal
+import time
+
 def seed_data():
     """Seed all necessary data"""
     db = SessionLocal()
@@ -51,8 +57,8 @@ def seed_data():
         vendors_data = [
             {
                 'vendor_id': UUID('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'),
-                'name': 'Sonic Rentals',
-                'username': 'sonic_rentals',
+                'name': 'sonicrentals',
+                'username': 'sonicrentals@test.com',
                 'password': 'vendor123',
                 'tags': ['audio', 'events'],
                 'profile': {'revenue': 1200000, 'profile_score': 88},
@@ -102,9 +108,18 @@ def seed_data():
         ]
 
         for vendor_data in vendors_data:
-            existing = db.query(models.Vendor).filter(
-                models.Vendor.vendor_id == vendor_data['vendor_id']
-            ).first()
+            # Retry mechanism for transient connection errors
+            for attempt in range(3):
+                try:
+                    existing = db.query(models.Vendor).filter(
+                        models.Vendor.vendor_id == vendor_data['vendor_id']
+                    ).first()
+                    break
+                except Exception as e:
+                    print(f"⚠️  Attempt {attempt+1} failed: {e}")
+                    time.sleep(1)
+            else:
+                raise Exception(f"Failed to query vendor {vendor_data['name']} after 3 attempts")
 
             if existing:
                 print(f"  ⏭️  {vendor_data['name']} already exists")
@@ -116,7 +131,7 @@ def seed_data():
             ).decode('utf-8')
 
             vendor = models.Vendor(
-                vendor_id=vendor_data['vendor_id'],
+                vendor_id=vendor_data['vendor_id'],  # keep UUID
                 name=vendor_data['name'],
                 username=vendor_data['username'],
                 password=hashed_pw,
@@ -127,9 +142,10 @@ def seed_data():
             )
 
             db.add(vendor)
+            db.flush()  # flush to DB without committing yet
             print(f"  ✅ Created: {vendor_data['name']}")
 
-        db.commit()
+        db.commit()  # commit once at the end
         print(f"✨ Vendors seeding completed!\n")
 
         # 2. Verify vendors
@@ -149,6 +165,7 @@ def seed_data():
         raise
     finally:
         db.close()
+
 
 if __name__ == "__main__":
     print("🚀 Starting complete database setup...\n")
