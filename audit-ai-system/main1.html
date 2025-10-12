@@ -555,6 +555,11 @@
               <div class="lg:col-span-2 p-5 rounded-xl2 bg-white/90 dark:bg-steel-800/70 border border-steel-100 dark:border-steel-700 shadow-soft">
                 <div class="flex items-center justify-between">
                   <div class="font-semibold">Automated Reports (Demo)</div>
+                      <div class="flex items-center gap-2">
+                        <button onclick="generateNewReport('Executive Summary')" class="text-sm px-3 py-2 rounded-lg bg-green-600 text-white hover:bg-green-700">
+                          Generate New
+                        </button>
+                      </div>
                   <div class="text-xs text-steel-500">Preview & download sample</div>
                 </div>
                 <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4" id="reportGrid"></div>
@@ -564,11 +569,16 @@
               <div class="p-5 rounded-xl2 bg-white/90 dark:bg-steel-800/70 border border-steel-100 dark:border-steel-700 shadow-soft">
                 <div class="flex items-center justify-between">
                   <div class="font-semibold">Evidence Locker</div>
+                  <div class="flex items-center gap-2">
+                    <button onclick="syncEvidenceFiles()" class="text-primary-600 text-sm underline">
+                      Sync Evidence
+                    </button>
                   <label class="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-steel-200 dark:border-steel-700 bg-white dark:bg-steel-800 cursor-pointer">
                     <svg class="h-5 w-5 text-primary-600" viewBox="0 0 24 24" fill="currentColor"><path d="M13 11h8v2h-8v8h-2v-8H3v-2h8V3h2v8z"/></svg>
                     <span class="text-sm">Add</span>
                     <input id="evidenceInput" type="file" class="hidden" multiple>
                   </label>
+                </div>
                 </div>
                 <div class="mt-3">
                   <div id="evidenceTags" class="flex flex-wrap gap-2"></div>
@@ -582,6 +592,9 @@
             <div class="p-5 rounded-xl2 bg-white/90 dark:bg-steel-800/70 border border-steel-100 dark:border-steel-700 shadow-soft">
               <div class="flex items-center justify-between">
                 <div class="font-semibold">Remediation Tracker</div>
+                 <button onclick="syncRemediationTasks()" class="text-primary-600 text-sm underline">
+                  Sync from Anomalies
+                </button>
               </div>
               <div class="mt-3 overflow-auto">
                 <table class="w-full text-sm">
@@ -1343,8 +1356,12 @@ document.addEventListener('DOMContentLoaded', function() {
       renderReports();
       renderAlerts();
       renderVendors();
-     
       wireBasics();
+
+        const evidenceInput = document.getElementById('evidenceInput');
+        if (evidenceInput) {
+          evidenceInput.addEventListener('change', handleEvidence);
+        }
       // open dashboard by default
       navigate('dashboard');
     });
@@ -2205,7 +2222,7 @@ async function triggerAgentScan() {
   try {
     const response = await fetch(`${API_BASE_URL}/api/audit/exploration/generate`, { method: 'POST' });
     const result = await response.json();
-    console.log('Agent scan result:', result);
+    console.log('Agent scan result:', result);s
     // Reload anomalies
     await loadAnomalies();
     alert('Agent scan completed! Anomalies generated.');
@@ -2524,229 +2541,645 @@ async function triggerAgentScan() {
 
 
     // REPORTS & EVIDENCE
-    function renderReports() {
-      const grid = document.getElementById('reportGrid');
-      grid.innerHTML = '';
-      const items = [
-        { name:'Executive Summary', type:'PDF', pages:3 },
-        { name:'Detailed Findings', type:'PDF', pages:12 },
-        { name:'Control Effectiveness', type:'Excel', pages:1 },
-        { name:'Remediation Plan', type:'PDF', pages:5 },
-      ];
-      items.forEach((it,i)=>{
-        const card = document.createElement('div');
-        card.className = 'p-4 rounded-xl border border-steel-100 dark:border-steel-700 bg-white/80 dark:bg-steel-900/30';
-        card.innerHTML = `
-          <div class="flex items-center justify-between">
-            <div class="font-medium">${it.name}</div>
-            <span class="text-xs px-2 py-1 rounded-full bg-steel-100 text-steel-700 dark:bg-steel-700 dark:text-steel-200">${it.type}</span>
-          </div>
-          <div class="mt-2 text-sm text-steel-500">${it.pages} page${it.pages>1?'s':''} preview</div>
-          <div class="mt-3 flex items-center gap-2">
-            <button class="px-3 py-2 rounded-lg bg-primary-600 text-white text-sm" onclick="previewReport('${it.name}', ${it.pages})">Preview</button>
-            <button class="px-3 py-2 rounded-lg border border-steel-200 dark:border-steel-700 text-sm" onclick="downloadSample('${it.name}')">Download sample</button>
-          </div>
-        `;
-        grid.appendChild(card);
-      });
 
-      // Evidence tags/filter
-      ['PO','INV','JE','DPIA','CHG','LOG'].forEach(t=> addTagChip(t));
+    let reportsData = {
+      reports: [],
+      evidence: [],
+      tasks: []
+    };
+
+    async function renderReports() {
+      await loadReportsEvidenceData();
+      renderReportGrid();
+      renderEvidenceTags();
       renderEvidence();
-    }
-    function previewReport(name, pages) {
-      const slides = Array.from({length: pages}).map((_,i)=>`
-        <div class="p-4 rounded-xl border border-steel-100 dark:border-steel-700 bg-white/90 dark:bg-steel-900/40">
-          <div class="text-sm font-semibold mb-2">${name} — Page ${i+1}</div>
-          <div class="h-40 rounded-lg bg-gradient-to-br from-steel-50 to-white dark:from-steel-900/30 dark:to-steel-900/10 flex items-center justify-center text-steel-500">Sample preview content</div>
-        </div>
-      `).join('');
-      openModal(`${name} (Demo Preview)`, `<div class="space-y-3">${slides}</div>`, `<button class="px-4 py-2.5 rounded-lg bg-primary-600 text-white" onclick="closeModal()">Close</button>`);
-    }
-    function downloadSample(name) {
-      const content = `${name}\nGenerated: ${new Date().toISOString()}\nThis is a demo sample file.`;
-      const blob = new Blob([content], {type:'text/plain'});
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url; a.download = name.replace(/\s+/g,'_') + '_Sample.txt';
-      document.body.appendChild(a); a.click(); a.remove();
-      URL.revokeObjectURL(url);
-      toast('Sample downloaded');
+      renderRemediation();
     }
 
-    // Evidence
-    const evidenceStore = [
-      { id:1, name:'INV-501.pdf', tags:['INV'], date:'2025-09-01' },
-      { id:2, name:'PO-184.csv', tags:['PO'], date:'2025-09-02' },
-      { id:3, name:'CHG-2103.log', tags:['CHG','LOG'], date:'2025-09-03' },
-      { id:4, name:'DPIA-42.docx', tags:['DPIA'], date:'2025-09-04' },
-    ];
-    let activeTag = '';
-    function addTagChip(tag) {
-      const wrap = document.getElementById('evidenceTags');
-      const chip = document.createElement('button');
-      chip.className = 'text-xs px-2 py-1 rounded-full border border-steel-200 dark:border-steel-700 bg-white dark:bg-steel-900';
-      chip.textContent = tag;
-      chip.onclick = ()=>{
-        activeTag = activeTag===tag? '' : tag;
-        [...wrap.children].forEach(c=> c.classList.remove('bg-primary-50','dark:bg-primary-900/30','text-primary-700','dark:text-primary-300'));
-        if (activeTag) {
-          chip.classList.add('bg-primary-50','dark:bg-primary-900/30','text-primary-700','dark:text-primary-300');
-        }
-        renderEvidence();
+
+    async function loadReportsEvidenceData() {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/audit/reports-evidence/all`);
+        const data = await response.json();
+        
+        reportsData.reports = data.reports || [];
+        reportsData.evidence = data.evidence_files || [];
+        reportsData.tasks = data.remediation_tasks || [];
+        
+        console.log('Reports & Evidence data loaded:', reportsData);
+      } catch (error) {
+        console.error('Error loading reports & evidence data:', error);
       }
-      wrap.appendChild(chip);
     }
-    function renderEvidence() {
-      const list = document.getElementById('evidenceList');
-      list.innerHTML = '';
-      evidenceStore.filter(e=> !activeTag || e.tags.includes(activeTag)).forEach(e=>{
-        const row = document.createElement('div');
-        row.className = 'p-3 rounded-lg border border-steel-100 dark:border-steel-700 bg-white/70 dark:bg-steel-900/30 flex items-center justify-between';
-        row.innerHTML = `
-          <div>
-            <div class="text-sm font-medium">${e.name}</div>
-            <div class="mt-1 text-xs text-steel-500 flex items-center gap-2">${e.tags.map(t=>`<span class="px-1.5 py-0.5 rounded bg-steel-100 text-steel-700 dark:bg-steel-700 dark:text-steel-200">${t}</span>`).join('')} <span>${e.date}</span></div>
-          </div>
-          <div class="flex items-center gap-2">
-            <button class="px-2 py-1 rounded-lg border border-steel-200 dark:border-steel-700 text-sm" onclick="previewEvidence('${e.name}')">Preview</button>
-            <button class="px-2 py-1 rounded-lg bg-primary-600 text-white text-sm" onclick="linkEvidence('${e.name}')">Link</button>
-          </div>
-        `;
-        list.appendChild(row);
-      });
-    }
-    function handleEvidence(evt) {
-      const files = [...evt.target.files];
-      files.forEach((f,i)=>{
-        evidenceStore.push({ id: Date.now()+i, name:f.name, tags:['LOG'], date:new Date().toISOString().slice(0,10) });
-      });
-      renderEvidence();
-      toast(`${files.length} item(s) added (local)`);
-      evt.target.value = '';
-    }
-    function previewEvidence(name) {
-      openModal('Evidence Preview', `
-        <div class="text-sm mb-2">${name}</div>
-        <div class="h-48 rounded-lg bg-gradient-to-br from-steel-50 to-white dark:from-steel-900/30 dark:to-steel-900/10 flex items-center justify-center text-steel-500">Preview placeholder</div>
-      `, `<button class="px-4 py-2.5 rounded-lg bg-primary-600 text-white" onclick="closeModal()">Close</button>`);
-    }
-    function linkEvidence(name) { toast(`${name} linked to case`); }
 
-    // REMEDIATION
-    const remediation = [
-      { id:1, title:'Duplicate vendor cleanup', owner:'Priya', due:'2025-10-05', status:'Open' },
-      { id:2, title:'Change Mgmt CAB enforcement', owner:'Marco', due:'2025-09-28', status:'In Progress' },
-      { id:3, title:'SoD matrix review', owner:'Li Wei', due:'2025-10-12', status:'Open' },
-    ];
+        // ============================================
+    // REPORTS SECTION
+    // ============================================
+
+    function renderReportGrid() {
+      const grid = document.getElementById('reportGrid');
+      if (!grid) return;
+      
+      grid.innerHTML = '';
+      
+      if (reportsData.reports.length === 0) {
+        grid.innerHTML = '<p class="col-span-2 text-steel-500 text-sm">No reports generated yet. Click "Generate Report" to create one.</p>';
+        return;
+      }
+
+        reportsData.reports.forEach(report => {
+          const card = document.createElement('div');
+          card.className = 'p-4 rounded-xl border border-steel-100 dark:border-steel-700 bg-white/80 dark:bg-steel-900/30';
+          card.innerHTML = `
+            <div class="flex items-center justify-between">
+              <div class="font-medium">${report.report_name}</div>
+              <span class="text-xs px-2 py-1 rounded-full bg-steel-100 text-steel-700 dark:bg-steel-700 dark:text-steel-200">${report.file_format}</span>
+            </div>
+            <div class="mt-2 text-sm text-steel-500">${report.page_count || 0} page${(report.page_count || 0) > 1 ? 's' : ''} • ${new Date(report.generated_date).toLocaleDateString()}</div>
+            <div class="mt-3 flex items-center gap-2">
+              <button class="px-3 py-2 rounded-lg bg-primary-600 text-white text-sm" onclick="previewReport('${report.report_id}')">Preview</button>
+              <button class="px-3 py-2 rounded-lg border border-steel-200 dark:border-steel-700 text-sm" onclick="downloadReport('${report.report_id}')">Download</button>
+            </div>
+          `;
+          grid.appendChild(card);
+        });
+      }
+
+    function previewReport(reportId) {
+        const report = reportsData.reports.find(r => r.report_id === reportId);
+        if (!report) {
+          openModal('Error', '<p class="text-red-500">Report not found</p>', '<button class="px-4 py-2.5 rounded-lg bg-primary-600 text-white" onclick="closeModal()">Close</button>');
+          return;
+        }
+        
+        const slides = Array.from({length: report.page_count || 3}).map((_, i) => `
+          <div class="p-4 rounded-xl border border-steel-100 dark:border-steel-700 bg-white/90 dark:bg-steel-900/40">
+            <div class="text-sm font-semibold mb-2">${report.report_name} — Page ${i + 1}</div>
+            <div class="h-40 rounded-lg bg-gradient-to-br from-steel-50 to-white dark:from-steel-900/30 dark:to-steel-900/10 flex items-center justify-center text-steel-500">
+              <div class="text-center">
+                <p>Report preview placeholder</p>
+                <p class="text-xs mt-2">Generated: ${new Date(report.generated_date).toLocaleString()}</p>
+              </div>
+            </div>
+          </div>
+        `).join('');
+        
+        openModal(`${report.report_name} (Preview)`, `<div class="space-y-3">${slides}</div>`, `<button class="px-4 py-2.5 rounded-lg bg-primary-600 text-white" onclick="closeModal()">Close</button>`);
+      }
+
+
+
+
+      // Updated download function - generates real PDF
+      async function downloadReport(reportId) {
+        const report = reportsData.reports.find(r => r.report_id === reportId);
+        if (!report) {
+          toast('Report not found');
+          return;
+        }
+        
+        try {
+          // Show loading
+          toast('Generating report...');
+          
+          // Call backend to generate report
+          const response = await fetch(`${API_BASE_URL}/api/audit/reports-evidence/generate/${encodeURIComponent(report.report_type)}`, {
+            method: 'POST'
+          });
+          
+          if (!response.ok) {
+            throw new Error('Failed to generate report');
+          }
+          
+          // Get the file blob
+          const blob = await response.blob();
+          
+          // Determine file extension
+          const fileExt = report.file_format === 'Excel' ? 'xlsx' : 'pdf';
+          
+          // Create download link
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `${report.report_name.replace(/\s+/g, '_')}.${fileExt}`;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          window.URL.revokeObjectURL(url);
+          
+          toast(`Report generated and downloaded!`);
+        } catch (error) {
+          console.error('Error downloading report:', error);
+          toast('Error generating report');
+        }
+      }
+
+      // Add a "Generate" button for manual generation
+      async function generateNewReport(reportType) {
+        try {
+          toast('Generating report...');
+          
+          const response = await fetch(`${API_BASE_URL}/api/audit/reports-evidence/generate/${encodeURIComponent(reportType)}`, {
+            method: 'POST'
+          });
+          
+          if (!response.ok) {
+            throw new Error('Failed to generate report');
+          }
+          
+          const blob = await response.blob();
+          const fileExt = reportType === 'Control Effectiveness' ? 'xlsx' : 'pdf';
+          
+          // Download
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `${reportType.replace(/\s+/g, '_')}_${Date.now()}.${fileExt}`;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          window.URL.revokeObjectURL(url);
+          
+          // Reload to show new report in list
+          await loadReportsEvidenceData();
+          renderReportGrid();
+          
+          toast('Report generated successfully!');
+        } catch (error) {
+          console.error('Error generating report:', error);
+          toast('Error generating report');
+        }
+      }
+
+    // ============================================
+// EVIDENCE SECTION
+// ============================================
+
+    let activeTag = '';
+
+    function renderEvidenceTags() {
+      const wrap = document.getElementById('evidenceTags');
+      if (!wrap) return;
+      
+      wrap.innerHTML = '';
+      
+      // Get unique file types from evidence
+      const types = [...new Set(reportsData.evidence.map(e => e.file_type))];
+      const allTypes = ['PO', 'INV', 'JE', 'DPIA', 'CHG', 'LOG'];
+      
+      // Use all standard types, or fall back to detected types
+      const tagsToShow = allTypes.length > 0 ? allTypes : types;
+      
+      tagsToShow.forEach(tag => {
+        const chip = document.createElement('button');
+        chip.className = 'text-xs px-2 py-1 rounded-full border border-steel-200 dark:border-steel-700 bg-white dark:bg-steel-900';
+        chip.textContent = tag;
+        chip.onclick = () => {
+          activeTag = activeTag === tag ? '' : tag;
+          [...wrap.children].forEach(c => c.classList.remove('bg-primary-50', 'dark:bg-primary-900/30', 'text-primary-700', 'dark:text-primary-300'));
+          if (activeTag) {
+            chip.classList.add('bg-primary-50', 'dark:bg-primary-900/30', 'text-primary-700', 'dark:text-primary-300');
+          }
+          renderEvidence();
+        };
+        wrap.appendChild(chip);
+      });
+    }
+
+    function renderEvidence() {
+        const list = document.getElementById('evidenceList');
+        if (!list) return;
+        
+        list.innerHTML = '';
+        
+        // Filter by active tag
+        const filtered = activeTag ? reportsData.evidence.filter(e => e.file_type === activeTag) : reportsData.evidence;
+        
+        if (filtered.length === 0) {
+          list.innerHTML = '<p class="text-steel-500 text-sm">No evidence files found</p>';
+          return;
+        }
+        
+        filtered.forEach(e => {
+          const row = document.createElement('div');
+          row.className = 'p-3 rounded-lg border border-steel-100 dark:border-steel-700 bg-white/70 dark:bg-steel-900/30 flex items-center justify-between';
+          row.innerHTML = `
+            <div class="flex-1">
+              <div class="text-sm font-medium">${e.file_name}</div>
+              <div class="mt-1 text-xs text-steel-500 flex items-center gap-2">
+                <span class="px-1.5 py-0.5 rounded bg-steel-100 text-steel-700 dark:bg-steel-700 dark:text-steel-200">${e.file_type}</span>
+                <span>${new Date(e.upload_date).toLocaleDateString()}</span>
+                ${e.linked_anomaly_ids && e.linked_anomaly_ids.length > 0 ? `<span class="text-primary-600">${e.linked_anomaly_ids.length} linked</span>` : ''}
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <button class="px-2 py-1 rounded-lg border border-steel-200 dark:border-steel-700 text-sm" onclick="previewEvidence('${e.file_id}')">Preview</button>
+              <button class="px-2 py-1 rounded-lg bg-primary-600 text-white text-sm" onclick="linkEvidence('${e.file_id}')">Link</button>
+            </div>
+          `;
+          list.appendChild(row);
+        });
+      }
+
+
+      function previewEvidence(fileId) {
+        const file = reportsData.evidence.find(e => e.file_id === fileId);
+        if (!file) {
+          openModal('Error', '<p class="text-red-500">File not found</p>', '<button class="px-4 py-2.5 rounded-lg bg-primary-600 text-white" onclick="closeModal()">Close</button>');
+          return;
+        }
+        
+        openModal('Evidence Preview', `
+          <div class="space-y-3">
+            <div class="text-sm mb-2">
+              <div class="font-semibold">${file.file_name}</div>
+              <div class="text-xs text-steel-500 mt-1">${file.description || 'No description available'}</div>
+            </div>
+            <div class="h-48 rounded-lg bg-gradient-to-br from-steel-50 to-white dark:from-steel-900/30 dark:to-steel-900/10 flex items-center justify-center text-steel-500">
+              <div class="text-center">
+                <p>Preview placeholder for ${file.file_type} file</p>
+                <p class="text-xs mt-2">Path: ${file.file_path}</p>
+              </div>
+            </div>
+            ${file.linked_anomaly_ids && file.linked_anomaly_ids.length > 0 ? `
+              <div class="text-sm">
+                <div class="font-semibold">Linked to:</div>
+                <div class="flex flex-wrap gap-1 mt-1">
+                  ${file.linked_anomaly_ids.map(id => `<span class="text-xs px-2 py-1 rounded-full bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300">${id}</span>`).join('')}
+                </div>
+              </div>
+            ` : ''}
+          </div>
+        `, `<button class="px-4 py-2.5 rounded-lg bg-primary-600 text-white" onclick="closeModal()">Close</button>`);
+      }
+
+      async function linkEvidence(fileId) {
+        // In a real implementation, you'd show a modal to select which anomaly to link to
+        // For now, just show a success message
+        toast(`Evidence ${fileId} ready to link. Select an anomaly to link to.`);
+      }
+
+      // Handle file upload (optional - for future implementation)
+      function handleEvidence(evt) {
+        const files = [...evt.target.files];
+        toast(`${files.length} file(s) selected (upload feature coming soon)`);
+        evt.target.value = '';
+      }
+
+
+   // ============================================
+    // REMEDIATION TRACKER
+    // ============================================
+
     function renderRemediation() {
       const body = document.getElementById('remediationBody');
+      if (!body) return;
+      
       body.innerHTML = '';
-      remediation.forEach((r,i)=>{
+      
+      if (reportsData.tasks.length === 0) {
+        body.innerHTML = '<tr><td colspan="5" class="py-4 text-center text-steel-500">No remediation tasks found</td></tr>';
+        return;
+      }
+      
+      reportsData.tasks.forEach(task => {
         const row = document.createElement('tr');
+        row.className = 'hover:bg-steel-50 dark:hover:bg-steel-700/40';
         row.innerHTML = `
-          <td class="py-2 px-2">${r.title}</td>
-          <td class="py-2 px-2">${r.owner}</td>
-          <td class="py-2 px-2">${r.due}</td>
-          <td class="py-2 px-2">${statusBadge(r.status)}</td>
+          <td class="py-2 px-2">${task.finding_title}</td>
+          <td class="py-2 px-2">${task.assigned_to || 'Unassigned'}</td>
+          <td class="py-2 px-2">${new Date(task.due_date).toLocaleDateString()}</td>
+          <td class="py-2 px-2">${statusBadge(task.status)}</td>
           <td class="py-2 px-2">
-            <select class="px-2 py-1 rounded-lg border border-steel-200 dark:border-steel-700 bg-white dark:bg-steel-900 text-sm" onchange="updateStatus(${i}, this.value)">
-              ${['Open','In Progress','Closed'].map(s=>`<option ${s===r.status?'selected':''}>${s}</option>`).join('')}
+            <select class="px-2 py-1 rounded-lg border border-steel-200 dark:border-steel-700 bg-white dark:bg-steel-900 text-sm" onchange="updateTaskStatus('${task.task_id}', this.value)">
+              ${['Open', 'In Progress', 'Resolved', 'Closed'].map(s => `<option ${s === task.status ? 'selected' : ''}>${s}</option>`).join('')}
             </select>
           </td>
         `;
         body.appendChild(row);
       });
     }
-    function statusBadge(s) {
-      const map = { 'Open':'bg-yellow-50 text-yellow-700 border-yellow-200', 'In Progress':'bg-blue-50 text-blue-700 border-blue-200', 'Closed':'bg-emerald-50 text-emerald-700 border-emerald-200' };
-      return `<span class="text-xs px-2 py-1 rounded-full border ${map[s]}">${s}</span>`;
-    }
-    function updateStatus(i, val) {
-      remediation[i].status = val;
-      renderRemediation();
-      toast('Status updated');
+
+    function statusBadge(status) {
+      const map = {
+        'Open': 'bg-yellow-50 text-yellow-700 border-yellow-200',
+        'In Progress': 'bg-blue-50 text-blue-700 border-blue-200',
+        'Resolved': 'bg-green-50 text-green-700 border-green-200',
+        'Closed': 'bg-emerald-50 text-emerald-700 border-emerald-200',
+        'Blocked': 'bg-red-50 text-red-700 border-red-200'
+      };
+      return `<span class="text-xs px-2 py-1 rounded-full border ${map[status] || map.Open}">${status}</span>`;
     }
 
+    async function updateTaskStatus(taskId, newStatus) {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/audit/reports-evidence/tasks/${taskId}`, {
+          method: 'PUT',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ status: newStatus, updated_by: 'user' })
+        });
+        
+        const result = await response.json();
+        
+        if (result.status === 'success') {
+          // Update local data
+          const task = reportsData.tasks.find(t => t.task_id === taskId);
+          if (task) task.status = newStatus;
+          
+          renderRemediation();
+          toast('Task status updated');
+        }
+      } catch (error) {
+        console.error('Error updating task status:', error);
+        toast('Error updating status');
+      }
+    }
+
+
+    // Optional: Sync tasks from anomalies
+    async function syncRemediationTasks() {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/audit/reports-evidence/tasks/sync`, { method: 'POST' });
+        const result = await response.json();
+        
+        toast(`Synced: ${result.tasks_created || 0} tasks created`);
+        await loadReportsEvidenceData();
+        renderRemediation();
+      } catch (error) {
+        console.error('Error syncing tasks:', error);
+        toast('Error syncing tasks');
+      }
+    }
+
+    // Optional: Sync evidence from anomalies
+    async function syncEvidenceFiles() {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/audit/reports-evidence/evidence/sync`, { method: 'POST' });
+        const result = await response.json();
+        
+        toast(`Synced: ${result.files_created || 0} evidence files created`);
+        await loadReportsEvidenceData();
+        renderEvidence();
+      } catch (error) {
+        console.error('Error syncing evidence:', error);
+        toast('Error syncing evidence');
+      }
+    }
+
+
     // ALERTS
-    const alertStore = [
-      { id:101, sev:'High', agent:'Finance', text:'Unusual vendor payment pattern (3 spikes)', time:'Today' },
-      { id:102, sev:'Medium', agent:'IT', text:'Change merged without reviewer', time:'Today' },
-      { id:103, sev:'Low', agent:'Compliance', text:'ISO control review due', time:'Yesterday' },
-      { id:104, sev:'High', agent:'IoT', text:'Machine vibration outlier cluster', time:'Yesterday' },
-      { id:105, sev:'Medium', agent:'Finance', text:'Round-dollar invoices > threshold', time:'2 days' },
-    ];
-    function renderAlerts() {
-      const list = document.getElementById('alertList');
-      list.innerHTML = '';
-      const groups = {};
-      alertStore.forEach(a=>{
-        groups[a.agent] = groups[a.agent] || [];
-        groups[a.agent].push(a);
-      });
-      Object.keys(groups).forEach(agent=>{
-        const box = document.createElement('div');
-        box.className = 'p-4 rounded-xl border border-steel-100 dark:border-steel-700 bg-white/70 dark:bg-steel-900/30';
-        const items = groups[agent].map(a=> `
+   let alertsData = {
+    alerts: [],
+    channels: []
+  };
+
+  let alertsRefreshInterval = null;
+
+  async function renderAlerts() {
+    await loadAlertsData();
+    await loadChannels();
+    displayAlerts(alertsData.alerts);
+    displayChannels();
+
+     if (!alertsRefreshInterval) {
+    alertsRefreshInterval = setInterval(async () => {
+      const oldCount = alertsData.alerts.length;
+      await loadAlertsData();
+      const newCount = alertsData.alerts.length;
+      
+      // Show notification if new alerts arrived
+      if (newCount > oldCount) {
+        const diff = newCount - oldCount;
+        toast(`🔔 ${diff} new alert${diff > 1 ? 's' : ''} received`);
+        
+        // Optional: Play sound
+        //playAlertSound();
+      }
+      
+      displayAlerts(alertsData.alerts);
+      await updateUnreadCount();
+      
+      console.log(`Alerts refreshed: ${newCount} total`);
+    }, 30000); // Refresh every 30 seconds
+  }
+  }
+
+
+  
+
+  async function loadAlertsData() {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/audit/alerts`);
+      const data = await response.json();
+      alertsData.alerts = data.alerts || [];
+      console.log('Alerts loaded:', alertsData.alerts);
+    } catch (error) {
+      console.error('Error loading alerts:', error);
+      alertsData.alerts = [];
+    }
+  }
+
+  async function loadChannels() {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/audit/alerts/channels`);
+      const data = await response.json();
+      alertsData.channels = data.channels || [];
+      console.log('Channels loaded:', alertsData.channels);
+    } catch (error) {
+      console.error('Error loading channels:', error);
+      alertsData.channels = [];
+    }
+  }
+
+  function displayAlerts(alerts) {
+    const list = document.getElementById('alertList');
+    if (!list) return;
+    
+    list.innerHTML = '';
+    
+    if (alerts.length === 0) {
+      list.innerHTML = '<div class="p-4 rounded-xl border border-steel-100 dark:border-steel-700 bg-white/70 dark:bg-steel-900/30 text-center text-steel-500">No alerts to display</div>';
+      return;
+    }
+    
+    // Group alerts by agent
+    const groups = {};
+    alerts.forEach(a => {
+      const agent = a.agent_source || 'Unknown';
+      groups[agent] = groups[agent] || [];
+      groups[agent].push(a);
+    });
+    
+    // Render each group
+    Object.keys(groups).forEach(agent => {
+      const box = document.createElement('div');
+      box.className = 'p-4 rounded-xl border border-steel-100 dark:border-steel-700 bg-white/70 dark:bg-steel-900/30';
+      
+      const items = groups[agent].map(a => {
+        const timeAgo = getTimeAgo(a.created_at);
+        return `
           <div class="p-3 rounded-lg border border-steel-100 dark:border-steel-700 bg-white/60 dark:bg-steel-900/40 flex items-center justify-between">
-            <div class="text-sm">${a.text}</div>
+            <div class="flex-1 text-sm">${a.title}</div>
             <div class="flex items-center gap-2">
-              ${sevTag(a.sev)}
-              <span class="text-xs text-steel-500">${a.time}</span>
-              <button class="px-2 py-1 rounded-lg border border-steel-200 dark:border-steel-700 text-xs" onclick="markAlert(${a.id})">Mark read</button>
+              ${sevTag(a.severity)}
+              <span class="text-xs text-steel-500">${timeAgo}</span>
+              <button class="px-2 py-1 rounded-lg border border-steel-200 dark:border-steel-700 text-xs hover:bg-steel-50 dark:hover:bg-steel-700" onclick="markAlertRead('${a.alert_id}')">Mark read</button>
             </div>
           </div>
-        `).join('');
-        box.innerHTML = `
-          <div class="flex items-center justify-between mb-3">
-            <div class="font-medium">${agent} Agent</div>
-            <div class="text-xs text-steel-500">${groups[agent].length} alerts</div>
-          </div>
-          <div class="space-y-2">${items}</div>
         `;
-        list.appendChild(box);
+      }).join('');
+      
+      box.innerHTML = `
+        <div class="flex items-center justify-between mb-3">
+          <div class="font-medium">${agent}</div>
+          <div class="text-xs text-steel-500">${groups[agent].length} alerts</div>
+        </div>
+        <div class="space-y-2">${items}</div>
+      `;
+      
+      list.appendChild(box);
+    });
+  }
+
+  function sevTag(severity) {
+    const map = {
+      'Critical': 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300',
+      'High': 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300',
+      'Medium': 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300',
+      'Low': 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'
+    };
+    return `<span class="text-[11px] px-1.5 py-0.5 rounded ${map[severity] || map.Medium}">${severity}</span>`;
+  }
+
+  function getTimeAgo(timestamp) {
+    if (!timestamp) return 'Unknown';
+    
+    const now = new Date();
+    const alertTime = new Date(timestamp);
+    const diffMs = now - alertTime;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+    
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays === 0) return 'Today';
+    if (diffDays === 1) return 'Yesterday';
+    if (diffDays < 7) return `${diffDays} days ago`;
+    return alertTime.toLocaleDateString();
+  }
+
+  async function markAlertRead(alertId) {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/audit/alerts/${alertId}/read`, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ user: 'current_user' })
       });
+      
+      if (response.ok) {
+        // Remove from local array
+        alertsData.alerts = alertsData.alerts.filter(a => a.alert_id !== alertId);
+        displayAlerts(alertsData.alerts);
+        toast('Alert marked as read');
+        
+        // Update unread count
+        updateUnreadCount();
+      }
+    } catch (error) {
+      console.error('Error marking alert as read:', error);
+      toast('Error marking alert');
     }
-    function sevTag(s) {
-      const map = { High:'bg-red-100 text-red-700', Medium:'bg-yellow-100 text-yellow-700', Low:'bg-emerald-100 text-emerald-700' };
-      return `<span class="text-[11px] px-1.5 py-0.5 rounded ${map[s]}">${s}</span>`;
+  }
+
+  async function filterAlerts() {
+    const severity = document.getElementById('alertSeverity').value;
+    const agent = document.getElementById('alertAgent').value;
+    
+    try {
+      const params = new URLSearchParams();
+      if (severity) params.append('severity', severity);
+      if (agent) params.append('agent', agent);
+      
+      const response = await fetch(`${API_BASE_URL}/api/audit/alerts/filtered?${params.toString()}`);
+      const data = await response.json();
+      
+      displayAlerts(data.alerts || []);
+    } catch (error) {
+      console.error('Error filtering alerts:', error);
     }
-    function markAlert(id) {
-      const idx = alertStore.findIndex(a=>a.id===id);
-      if (idx>-1) { alertStore.splice(idx,1); renderAlerts(); toast('Alert marked as read'); }
-    }
-    function filterAlerts() {
-      const sev = document.getElementById('alertSeverity').value;
-      const agent = document.getElementById('alertAgent').value;
-      const filtered = alertStore.filter(a=> (!sev || a.sev===sev) && (!agent || a.agent===agent));
-      const list = document.getElementById('alertList');
-      list.innerHTML = '';
-      const groups = {};
-      filtered.forEach(a=> (groups[a.agent]=groups[a.agent]||[]).push(a));
-      Object.keys(groups).forEach(agent=>{
-        const box = document.createElement('div');
-        box.className = 'p-4 rounded-xl border border-steel-100 dark:border-steel-700 bg-white/70 dark:bg-steel-900/30';
-        box.innerHTML = `
-          <div class="flex items-center justify-between mb-3">
-            <div class="font-medium">${agent} Agent</div>
-            <div class="text-xs text-steel-500">${groups[agent].length} alerts</div>
-          </div>
-          <div class="space-y-2">
-            ${groups[agent].map(a=>`
-              <div class="p-3 rounded-lg border border-steel-100 dark:border-steel-700 bg-white/60 dark:bg-steel-900/40 flex items-center justify-between">
-                <div class="text-sm">${a.text}</div>
-                <div class="flex items-center gap-2">
-                  ${sevTag(a.sev)}
-                  <span class="text-xs text-steel-500">${a.time}</span>
-                  <button class="px-2 py-1 rounded-lg border border-steel-200 dark:border-steel-700 text-xs" onclick="markAlert(${a.id})">Mark read</button>
-                </div>
-              </div>
-            `).join('')}
-          </div>
-        `;
-        list.appendChild(box);
+  }
+
+  // Display channels
+  function displayChannels() {
+    const checkboxes = {
+      'Microsoft Teams': document.getElementById('chTeams'),
+      'Slack': document.getElementById('chSlack'),
+      'Email': document.getElementById('chEmail')
+    };
+    
+    alertsData.channels.forEach(channel => {
+      const checkbox = checkboxes[channel.channel_name];
+      if (checkbox) {
+        checkbox.checked = channel.is_enabled;
+        checkbox.onchange = () => toggleChannel(channel.channel_name, checkbox.checked);
+      }
+    });
+  }
+
+  async function toggleChannel(channelName, isEnabled) {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/audit/alerts/channels/${encodeURIComponent(channelName)}?is_enabled=${isEnabled}`, {
+        method: 'PUT'
       });
+      
+      if (response.ok) {
+        toast(`${channelName} ${isEnabled ? 'enabled' : 'disabled'}`);
+      }
+    } catch (error) {
+      console.error('Error toggling channel:', error);
+      toast('Error updating channel');
     }
+  }
+
+  // Update unread count badge (optional)
+  async function updateUnreadCount() {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/audit/alerts/unread-count`);
+      const data = await response.json();
+      
+      // Update badge in nav (if you have one)
+      const badge = document.querySelector('#alertBadge');
+      if (badge) {
+        badge.textContent = data.count;
+        badge.style.display = data.count > 0 ? 'block' : 'none';
+      }
+    } catch (error) {
+      console.error('Error getting unread count:', error);
+    }
+  }
+
+  // Optional: Auto-generate alerts from anomalies
+  async function generateAlertsFromAnomalies() {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/audit/alerts/generate`, { method: 'POST' });
+      const result = await response.json();
+      
+      toast(`Generated ${result.alerts_created || 0} new alerts`);
+      await loadAlertsData();
+      displayAlerts(alertsData.alerts);
+    } catch (error) {
+      console.error('Error generating alerts:', error);
+      toast('Error generating alerts');
+    }
+  }
+
+  window.addEventListener('beforeunload', () => {
+      if (alertsRefreshInterval) {
+        clearInterval(alertsRefreshInterval);
+      }
+    });
+
     // VENDORS
     // ----------------------------
     // Simple in-memory data store
